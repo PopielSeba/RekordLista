@@ -14,6 +14,14 @@ export const Footer = () => {
               www.PPP-PROGRAM.pl
             </a>
           </div>
+          <div className="mt-1">
+            <a 
+              href="tel:+48500600525" 
+              className="text-primary hover:text-primary/80 transition-colors"
+            >
+              +48 500 600 525
+            </a>
+          </div>
         </div>
       </div>
     </footer>
