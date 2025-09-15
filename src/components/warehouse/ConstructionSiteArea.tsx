@@ -51,10 +51,11 @@ const DraggableEquipmentItem = ({
     }),
   });
 
-  // Find child equipment (accessories) for this item - only when current item has a real equipment id
+  // Find child equipment (accessories) for this item - prefer project_parent_id link
+  // Only derive by equipment hierarchy when the current item has a real equipment id
   const childEquipment = allProjectEquipment.filter(eq => (
     (eq as any).project_parent_id === item.id ||
-    (!!item.equipment?.id && !eq.project_parent_id && eq.equipment?.parent_id === item.equipment?.id)
+    (!!item.equipment_id && !eq.project_parent_id && eq.equipment?.parent_id === item.equipment_id)
   ));
   const hasDescription = !!item.custom_description?.trim();
   const hasChildren = childEquipment.length > 0 || hasDescription;
