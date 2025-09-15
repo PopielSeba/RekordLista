@@ -887,9 +887,11 @@ interface WarehouseTileProps {
   equipment: ProjectEquipment[];
   allProjectEquipment: ProjectEquipment[];
   reverseFlow?: boolean;
+  removeEquipment?: (equipmentId: string) => void;
+  canDeleteEquipment?: boolean;
 }
 
-  const WarehouseTile = ({ warehouse, type, onAdd, onRemove, onEquipmentMoved, canManage, canDeleteWarehouses = false, equipment, allProjectEquipment, reverseFlow = false }: WarehouseTileProps) => {
+  const WarehouseTile = ({ warehouse, type, onAdd, onRemove, onEquipmentMoved, canManage, canDeleteWarehouses = false, equipment, allProjectEquipment, reverseFlow = false, removeEquipment, canDeleteEquipment = false }: WarehouseTileProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [warehouseName, setWarehouseName] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -1097,7 +1099,8 @@ interface WarehouseTileProps {
                         : 'bg-muted text-foreground'
                     }
                     updateEquipmentStatus={() => {}}
-                    removeEquipment={() => {}}
+                    removeEquipment={removeEquipment || (() => {})}
+                    canDeleteEquipment={canDeleteEquipment}
                     allProjectEquipment={allProjectEquipment}
                     expandedItems={expandedItems}
                     onToggleExpand={(id) => {
@@ -1201,12 +1204,16 @@ interface CoordinationCenterProps {
     isWorker: boolean;
     isManager: boolean;
   };
+  removeEquipment?: (equipmentId: string) => void;
+  canDeleteEquipment?: boolean;
 }
 
 const CoordinationCenter = ({ 
   onEquipmentMoved, 
   equipment, 
-  canManage, 
+  canManage,
+  removeEquipment,
+  canDeleteEquipment = false, 
   reverseFlow = false, 
   allProjectEquipment = [],
   userCoordinationPermissions = { canMoveAnywhere: false, isWorker: false, isManager: false }
@@ -1493,7 +1500,8 @@ const CoordinationCenter = ({
                   getStatusLabel={() => 'W koordynacji'}
                   getStatusColor={() => 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-blue-200/50 shadow-lg'}
                   updateEquipmentStatus={() => {}}
-                  removeEquipment={() => {}}
+                  removeEquipment={removeEquipment || (() => {})}
+                  canDeleteEquipment={canDeleteEquipment}
                   allProjectEquipment={allProjectEquipment}
                   expandedItems={expandedItems}
                   onToggleExpand={toggleExpanded}
@@ -1740,7 +1748,8 @@ const DestinationArea = ({ onEquipmentMoved, equipment, canManage, allProjectEqu
                   getStatusLabel={() => 'Dostarczony'}
                   getStatusColor={() => 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-purple-600 shadow-purple-200/50 shadow'}
                   updateEquipmentStatus={() => {}}
-                  removeEquipment={() => {}}
+                  removeEquipment={removeEquipment || (() => {})}
+                  canDeleteEquipment={canDeleteEquipment}
                   allProjectEquipment={allProjectEquipment}
                   expandedItems={expandedItems}
                   onToggleExpand={toggleExpanded}
@@ -2381,6 +2390,8 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
                   equipment={(projectEquipment || []).filter(eq => (eq.status === 'ready' || (reverseFlow && eq.status === 'delivered')) && eq.intermediate_warehouse_id === warehouse.id && !eq.project_parent_id && !eq.equipment?.parent_id)}
                   allProjectEquipment={projectEquipment || []}
                   reverseFlow={reverseFlow}
+                  removeEquipment={removeEquipment}
+                  canDeleteEquipment={canDeleteEquipment}
                 />
             ))}
             {preCoordinationWarehouses.length < 5 && canManageCoordination && (
@@ -2400,6 +2411,8 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
           reverseFlow={reverseFlow}
           allProjectEquipment={projectEquipment || []}
           userCoordinationPermissions={userCoordinationPermissions}
+          removeEquipment={removeEquipment}
+          canDeleteEquipment={canDeleteEquipment}
         />
 
         {/* Post-Coordination Warehouses */}
@@ -2418,6 +2431,8 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
                   equipment={(projectEquipment || []).filter(eq => eq.status === 'loading' && eq.intermediate_warehouse_id === warehouse.id && !eq.project_parent_id && !eq.equipment?.parent_id)}
                   allProjectEquipment={projectEquipment || []}
                   reverseFlow={reverseFlow}
+                  removeEquipment={removeEquipment}
+                  canDeleteEquipment={canDeleteEquipment}
                 />
               ))}
             {canManageCoordination && (
