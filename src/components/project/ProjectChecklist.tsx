@@ -58,6 +58,7 @@ interface DepartmentTileProps {
   onEquipmentMoved: (equipmentId: string, newStatus: string, warehouseId?: string | null) => void;
   canManage: boolean;
   canDeleteEquipment?: boolean;
+  removeEquipment?: (equipmentId: string) => void;
 }
 
 interface DraggableEquipmentItemProps {
@@ -204,7 +205,8 @@ const DepartmentTile = ({
   onEquipmentAdded,
   onEquipmentMoved,
   canManage,
-  canDeleteEquipment = false
+  canDeleteEquipment = false,
+  removeEquipment
 }: DepartmentTileProps) => {
   const { toast } = useToast();
   const [isEquipmentDialogOpen, setIsEquipmentDialogOpen] = useState(false);
@@ -411,64 +413,6 @@ const DepartmentTile = ({
     }
   };
 
-  const removeEquipment = async (equipmentId: string) => {
-    try {
-      // Get equipment data for logging before deletion
-      const { data: equipmentData } = await supabase
-        .from('project_equipment')
-        .select('*, equipment(*), departments(*)')
-        .eq('id', equipmentId)
-        .single();
-
-      const { error } = await supabase
-        .from('project_equipment')
-        .delete()
-        .eq('id', equipmentId);
-
-      if (error) {
-        toast({
-          title: "Błąd",
-          description: "Nie udało się usunąć sprzętu",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Log equipment deletion
-      if (equipmentData) {
-        const equipmentName = equipmentData.is_custom 
-          ? equipmentData.custom_name 
-          : equipmentData.equipment?.name || 'Nieznany sprzęt';
-
-        await supabase.rpc('log_equipment_action', {
-          _project_id: projectId,
-          _action_type: 'removed',
-          _equipment_id: equipmentData.equipment_id,
-          _project_equipment_id: equipmentId,
-          _old_value: equipmentName,
-          _details: {
-            equipment_name: equipmentName,
-            department_name: equipmentData.departments?.name,
-            status: equipmentData.status,
-            was_custom: equipmentData.is_custom
-          }
-        });
-      }
-
-      toast({
-        title: "Sukces",
-        description: "Sprzęt został usunięty",
-      });
-
-      onEquipmentAdded();
-    } catch (error) {
-      toast({
-        title: "Błąd",
-        description: "Wystąpił błąd podczas usuwania sprzętu",
-        variant: "destructive",
-      });
-    }
-  };
 
   const updateEquipmentStatus = async (equipmentId: string, newStatus: string) => {
     try {
@@ -1543,9 +1487,11 @@ interface DestinationAreaProps {
   equipment: ProjectEquipment[];
   allProjectEquipment?: ProjectEquipment[];
   canManage: boolean;
+  removeEquipment?: (equipmentId: string) => void;
+  canDeleteEquipment?: boolean;
 }
 
-const DestinationArea = ({ onEquipmentMoved, equipment, canManage, allProjectEquipment = [] }: DestinationAreaProps) => {
+const DestinationArea = ({ onEquipmentMoved, equipment, canManage, allProjectEquipment = [], removeEquipment, canDeleteEquipment = false }: DestinationAreaProps) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -2175,6 +2121,65 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
     fetchProjectEquipment();
   };
 
+  const removeEquipment = async (equipmentId: string) => {
+    try {
+      // Get equipment data for logging before deletion
+      const { data: equipmentData } = await supabase
+        .from('project_equipment')
+        .select('*, equipment(*), departments(*)')
+        .eq('id', equipmentId)
+        .single();
+
+      const { error } = await supabase
+        .from('project_equipment')
+        .delete()
+        .eq('id', equipmentId);
+
+      if (error) {
+        toast({
+          title: "Błąd",
+          description: "Nie udało się usunąć sprzętu",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Log equipment deletion
+      if (equipmentData) {
+        const equipmentName = equipmentData.is_custom 
+          ? equipmentData.custom_name 
+          : equipmentData.equipment?.name || 'Nieznany sprzęt';
+
+        await supabase.rpc('log_equipment_action', {
+          _project_id: projectId,
+          _action_type: 'removed',
+          _equipment_id: equipmentData.equipment_id,
+          _project_equipment_id: equipmentId,
+          _old_value: equipmentName,
+          _details: {
+            equipment_name: equipmentName,
+            department_name: equipmentData.departments?.name,
+            status: equipmentData.status,
+            was_custom: equipmentData.is_custom
+          }
+        });
+      }
+
+      toast({
+        title: "Sukces",
+        description: "Sprzęt został usunięty",
+      });
+
+      fetchProjectEquipment();
+    } catch (error) {
+      toast({
+        title: "Błąd",
+        description: "Wystąpił błąd podczas usuwania sprzętu",
+        variant: "destructive",
+      });
+    }
+  };
+
   const moveEquipment = async (equipmentId: string, newStatus: string, warehouseId?: string | null) => {
     console.log('Moving equipment:', { equipmentId, newStatus, warehouseId, user: user?.email });
     try {
@@ -2347,6 +2352,8 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
                     onEquipmentAdded={fetchProjectEquipment}
                     onEquipmentMoved={moveEquipment}
                     canManage={canManageThisDepartment}
+                    canDeleteEquipment={canDeleteEquipment}
+                    removeEquipment={removeEquipment}
                   />
                 );
               })}
@@ -2451,6 +2458,8 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
             equipment={(projectEquipment || []).filter(eq => eq.status === 'delivered')}
             allProjectEquipment={projectEquipment || []}
             canManage={canManageCoordination}
+            removeEquipment={removeEquipment}
+            canDeleteEquipment={canDeleteEquipment}
           />
         )}
 
@@ -2477,8 +2486,9 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
                     onRemoveDepartment={removeDepartment}
                     onEquipmentAdded={fetchProjectEquipment}
                     onEquipmentMoved={moveEquipment}
-                      canManage={canManageThisDepartment}
-                      canDeleteEquipment={canDeleteEquipment}
+                    canManage={canManageThisDepartment}
+                    canDeleteEquipment={canDeleteEquipment}
+                    removeEquipment={removeEquipment}
                   />
                 );
               })}
