@@ -69,37 +69,25 @@ export const UserRoleManager = () => {
   const updateUserRole = async (userId: string, newRole: 'admin' | 'pracownik') => {
     setUpdating(userId);
     try {
-      // Najpierw sprawdź czy użytkownik już ma rolę
-      const { data: existingRole } = await supabase
+      // Najpierw usuń wszystkie istniejące role użytkownika
+      const { error: deleteError } = await supabase
         .from('user_roles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
+        .delete()
+        .eq('user_id', userId);
 
-      if (existingRole) {
-        // Aktualizuj istniejącą rolę
-        const { error } = await supabase
-          .from('user_roles')
-          .update({ 
-            role: newRole,
-            assigned_by: (await supabase.auth.getUser()).data.user?.id,
-            assigned_at: new Date().toISOString()
-          })
-          .eq('user_id', userId);
+      if (deleteError) throw deleteError;
 
-        if (error) throw error;
-      } else {
-        // Utwórz nową rolę
-        const { error } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: userId,
-            role: newRole,
-            assigned_by: (await supabase.auth.getUser()).data.user?.id
-          });
+      // Następnie dodaj nową rolę
+      const { error: insertError } = await supabase
+        .from('user_roles')
+        .insert({
+          user_id: userId,
+          role: newRole,
+          assigned_by: (await supabase.auth.getUser()).data.user?.id,
+          assigned_at: new Date().toISOString()
+        });
 
-        if (error) throw error;
-      }
+      if (insertError) throw insertError;
 
       toast({
         title: "Sukces",
