@@ -1,0 +1,2 @@
+-- Add project_parent_id column to link accessories to their parent equipment instances
+ALTER TABLE project_equipment ADD COLUMN project_parent_id UUID REFERENCES project_equipment(id) ON DELETE CASCADE;
