@@ -723,7 +723,7 @@ const DepartmentTile = ({
       </CardHeader>
       <CardContent className="p-3">
         <div className="space-y-2 max-h-52 overflow-y-auto">
-          {parentEquipment.slice(0, 8).map((item) => (
+          {parentEquipment.map((item) => (
             <DraggableEquipmentItem
               key={item.id}
               item={item}
@@ -738,11 +738,6 @@ const DepartmentTile = ({
               canDeleteEquipment={canDeleteEquipment}
             />
           ))}
-          {parentEquipment.length > 8 && (
-            <div className="text-xs text-muted-foreground text-center">
-              +{parentEquipment.length - 8} więcej
-            </div>
-          )}
           {!parentEquipment.length && (
             <div className="text-xs text-muted-foreground text-center py-4">
               Brak sprzętu
@@ -1027,7 +1022,7 @@ interface WarehouseTileProps {
         <CardContent className="p-3">
           <div className="grid grid-cols-1 gap-2 max-h-52 overflow-y-auto">
             {equipment.length > 0 ? (
-              equipment.slice(0, 8).map((item) => (
+              equipment.map((item) => (
                 <div key={item.id} className="space-y-1">
                   <DraggableEquipmentItem
                     item={item}
@@ -1080,11 +1075,6 @@ interface WarehouseTileProps {
               ))
             ) : (
               <div className="text-xs text-muted-foreground text-center py-4">Brak sprzętu</div>
-            )}
-            {equipment.length > 8 && (
-              <div className="text-xs text-muted-foreground text-center">
-                +{equipment.length - 8} więcej
-              </div>
             )}
           </div>
         </CardContent>
@@ -1436,7 +1426,7 @@ const CoordinationCenter = ({
       <CardContent className="p-6">
         {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 0 ? (
           <div className="grid grid-cols-3 gap-2 max-h-32 overflow-y-auto">
-            {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).slice(0, 15).map((item) => (
+            {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).map((item) => (
               <div key={item.id} className="space-y-1">
                 <DraggableEquipmentItem
                   item={item}
@@ -1465,11 +1455,6 @@ const CoordinationCenter = ({
                 )}
               </div>
             ))}
-            {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 15 && (
-              <div className="text-xs text-muted-foreground text-center col-span-3">
-                +{equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length - 15} więcej
-              </div>
-            )}
           </div>
         ) : (
           <div className="text-center text-muted-foreground">
@@ -1686,7 +1671,7 @@ const DestinationArea = ({ onEquipmentMoved, equipment, canManage, allProjectEqu
       <CardContent className="p-6">
         {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 0 ? (
           <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
-            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).slice(0, 24).map((item) => (
+            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).map((item) => (
               <div key={item.id} className="space-y-1">
                 <DraggableEquipmentItem
                   item={item}
@@ -1715,11 +1700,6 @@ const DestinationArea = ({ onEquipmentMoved, equipment, canManage, allProjectEqu
                 )}
               </div>
             ))}
-            {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 24 && (
-              <div className="text-xs text-muted-foreground text-center col-span-3">
-                +{equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length - 24} więcej
-              </div>
-            )}
           </div>
         ) : (
           <div className="text-center text-muted-foreground">
@@ -2310,7 +2290,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
   };
 
   // All authenticated users have admin-like permissions now
-  const canAddDepartments = (projectDepartments || []).length < 8;
+  const canAddDepartments = true; // Removed 8 department limit
   const canManageCoordination = !!user;
   
   // All authenticated users can see all departments

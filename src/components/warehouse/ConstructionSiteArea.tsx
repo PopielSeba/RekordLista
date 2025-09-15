@@ -331,7 +331,7 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
       <CardContent className="p-6">
         {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 0 ? (
           <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
-            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).slice(0, 15).map((item) => (
+            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).map((item) => (
               <div key={item.id} className="space-y-1">
                 <DraggableEquipmentItem
                   item={item}
@@ -346,11 +346,6 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
                 />
               </div>
             ))}
-            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 15 && (
-              <div className="text-xs text-muted-foreground text-center col-span-3">
-                +{filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length - 15} więcej
-              </div>
-            )}
           </div>
         ) : (
           <div className="text-center text-muted-foreground">
