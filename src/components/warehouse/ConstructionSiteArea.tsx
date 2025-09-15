@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Construction, Printer } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Construction, Printer, Search as SearchIcon } from 'lucide-react';
 import { Equipment, ProjectEquipment } from '@/types';
 import { useDrop, useDrag } from 'react-dnd';
 
@@ -120,6 +121,7 @@ const DraggableEquipmentItem = ({
 
 export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEquipment = [], canManage, projectId }: ConstructionSiteAreaProps) => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
   
   const toggleExpanded = (itemId: string) => {
     setExpandedItems(prev => {
@@ -132,6 +134,20 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
       return newSet;
     });
   };
+
+  // Filter equipment based on search query
+  const filteredEquipment = equipment.filter(eq => {
+    if (!searchQuery.trim()) return true;
+    
+    const displayName = eq.is_custom 
+      ? (eq.custom_name || 'Nieznany sprzęt')
+      : (eq.equipment?.name || 'Nieznany sprzęt');
+    
+    const description = eq.custom_description || '';
+    
+    return displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           description.toLowerCase().includes(searchQuery.toLowerCase());
+  });
   const printConstructionSiteList = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -285,11 +301,37 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
             {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length} elementów do zwrotu
           </div>
         )}
+        {/* Search bar */}
+        <div className="mt-3">
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Szukaj sprzętu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-8 text-sm"
+            />
+          </div>
+        </div>
+        {/* Equipment count */}
+        {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 0 && (
+          <div className="text-sm text-muted-foreground text-center mt-2">
+            {searchQuery ? (
+              <>
+                {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length} z {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length} elementów
+                {searchQuery && <span className="ml-2 text-primary">"{searchQuery}"</span>}
+              </>
+            ) : (
+              `${equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length} elementów do zwrotu`
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-6">
-        {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 0 ? (
+        {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 0 ? (
           <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
-            {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).slice(0, 15).map((item) => (
+            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).slice(0, 15).map((item) => (
               <div key={item.id} className="space-y-1">
                 <DraggableEquipmentItem
                   item={item}
@@ -304,9 +346,9 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
                 />
               </div>
             ))}
-            {equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 15 && (
+            {filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length > 15 && (
               <div className="text-xs text-muted-foreground text-center col-span-3">
-                +{equipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length - 15} więcej
+                +{filteredEquipment.filter(eq => !eq.equipment?.parent_id && !(eq as any).project_parent_id).length - 15} więcej
               </div>
             )}
           </div>
