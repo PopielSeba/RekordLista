@@ -79,7 +79,7 @@ export const Project = () => {
           <h2 className="text-2xl font-semibold text-foreground mb-4">
             Projekt nie został znaleziony
           </h2>
-          <Button onClick={() => navigate('/')}>
+          <Button onClick={() => navigate('/projects')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Powrót do projektów
           </Button>
@@ -98,7 +98,7 @@ export const Project = () => {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/projects')}
               className="h-8 w-8 p-0"
             >
               <ArrowLeft className="h-4 w-4" />
