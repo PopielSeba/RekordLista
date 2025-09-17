@@ -613,6 +613,10 @@ const DepartmentTile = ({
       className={`min-w-[200px] max-w-[250px] transition-all duration-200 ${
         isOverDept && canManage ? 'bg-warning/10 border-warning border-2' : 'hover:bg-muted/50'
       }`}
+      style={{
+        boxShadow: '0 0 20px rgba(234, 179, 8, 0.3), 0 0 40px rgba(234, 179, 8, 0.1)',
+        filter: 'drop-shadow(0 0 8px rgba(234, 179, 8, 0.2))'
+      }}
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
@@ -975,12 +979,27 @@ interface WarehouseTileProps {
   };
 
   if (warehouse) {
+    const getGlowStyle = () => {
+      if (type === 'pre_coordination') {
+        return {
+          boxShadow: '0 0 20px rgba(34, 197, 94, 0.3), 0 0 40px rgba(34, 197, 94, 0.1)',
+          filter: 'drop-shadow(0 0 8px rgba(34, 197, 94, 0.2))'
+        };
+      } else {
+        return {
+          boxShadow: '0 0 20px rgba(59, 130, 246, 0.3), 0 0 40px rgba(59, 130, 246, 0.1)',
+          filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.2))'
+        };
+      }
+    };
+
     return (
       <Card 
         ref={dropWarehouse}
         className={`min-w-[200px] max-w-[250px] transition-all duration-200 ${
           isOverWarehouse ? 'bg-primary/5 border-primary' : 'hover:bg-muted/50'
         }`}
+        style={getGlowStyle()}
       >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -1400,6 +1419,10 @@ const CoordinationCenter = ({
       className={`w-full max-w-2xl mx-auto transition-all duration-200 ${
         isOverCoord ? 'bg-primary/5 border-primary' : ''
       }`}
+      style={{
+        boxShadow: '0 0 20px rgba(59, 130, 246, 0.3), 0 0 40px rgba(59, 130, 246, 0.1)',
+        filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.2))'
+      }}
     >
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -1624,6 +1647,10 @@ const DestinationArea = ({ onEquipmentMoved, equipment, canManage, allProjectEqu
       className={`w-full max-w-2xl mx-auto transition-all duration-200 ${
         isOverDestination ? 'bg-primary/5 border-primary' : ''
       }`}
+      style={{
+        boxShadow: '0 0 20px rgba(147, 51, 234, 0.3), 0 0 40px rgba(147, 51, 234, 0.1)',
+        filter: 'drop-shadow(0 0 8px rgba(147, 51, 234, 0.2))'
+      }}
     >
       <CardHeader>
         <div className="flex items-center justify-between">

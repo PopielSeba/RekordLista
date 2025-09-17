@@ -279,6 +279,10 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
       className={`w-full max-w-2xl mx-auto transition-all duration-200 ${
         isOver ? 'bg-primary/5 border-primary' : ''
       }`}
+      style={{
+        boxShadow: '0 0 20px rgba(147, 51, 234, 0.3), 0 0 40px rgba(147, 51, 234, 0.1)',
+        filter: 'drop-shadow(0 0 8px rgba(147, 51, 234, 0.2))'
+      }}
     >
       <CardHeader>
         <div className="flex items-center justify-between">
