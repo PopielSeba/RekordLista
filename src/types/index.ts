@@ -13,6 +13,7 @@ export interface Equipment {
   custom_description?: string | null;
   custom_name?: string | null;
   is_custom?: boolean;
+  project_files?: ProjectFile[];
 }
 
 export interface ProjectEquipment {
@@ -28,6 +29,20 @@ export interface ProjectEquipment {
   intermediate_warehouse_id?: string | null;
   project_parent_id?: string | null;
   equipment?: Equipment;
+  project_files?: ProjectFile[];
+}
+
+export interface ProjectFile {
+  id: string;
+  project_id: string;
+  project_equipment_id: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  file_data: string; // Base64 encoded binary data
+  mime_type: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Department {
