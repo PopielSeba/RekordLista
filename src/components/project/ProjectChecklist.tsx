@@ -167,7 +167,11 @@ const DraggableEquipmentItem = ({
             </Button>
           )}
           {/* File preview buttons for file products */}
-          {item.is_custom && (item.project_files?.length > 0 || item.custom_description?.startsWith('data:')) && (
+          {(() => {
+            const hasFileData = item.project_files?.length > 0 || item.custom_description?.startsWith('data:');
+            const hasFileExtension = item.custom_name && /\.(pdf|jpg|jpeg|png|bmp|gif|tiff|doc|docx|txt)$/i.test(item.custom_name);
+            return item.is_custom && (hasFileData || hasFileExtension);
+          })() && (
             <>
               <Button
                 variant="ghost"
@@ -191,6 +195,11 @@ const DraggableEquipmentItem = ({
                     fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
                     fileName = item.custom_name || 'Nieznany plik';
                     fileUrl = item.custom_description;
+                  } 
+                  // If no file data but has file extension, show error
+                  else if (item.custom_name && /\.(pdf|jpg|jpeg|png|bmp|gif|tiff|doc|docx|txt)$/i.test(item.custom_name)) {
+                    alert(`Plik "${item.custom_name}" nie ma danych do podglądu. Dane pliku mogły zostać utracone.`);
+                    return;
                   } else {
                     return;
                   }
@@ -248,6 +257,11 @@ const DraggableEquipmentItem = ({
                     fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
                     fileName = item.custom_name || 'Nieznany plik';
                     fileUrl = item.custom_description;
+                  } 
+                  // If no file data but has file extension, show error
+                  else if (item.custom_name && /\.(pdf|jpg|jpeg|png|bmp|gif|tiff|doc|docx|txt)$/i.test(item.custom_name)) {
+                    alert(`Plik "${item.custom_name}" nie ma danych do wydruku. Dane pliku mogły zostać utracone.`);
+                    return;
                   } else {
                     return;
                   }
@@ -494,11 +508,24 @@ const DepartmentTile = ({
             if (fileError) {
               console.error('Error saving file to project_files:', fileError);
               console.error('File error details:', { code: fileError.code, message: fileError.message, details: fileError.details });
-              toast({
-                title: "Ostrzeżenie",
-                description: "Produkt został dodany, ale plik nie został zapisany",
-                variant: "destructive",
-              });
+              
+              // Fallback: save file data to custom_description as base64
+              const dataUrl = `data:${selectedFile.type};base64,${base64String}`;
+              const { error: updateError } = await supabase
+                .from('project_equipment')
+                .update({ custom_description: dataUrl })
+                .eq('id', mainEquipmentResult.id);
+              
+              if (updateError) {
+                console.error('Error updating custom_description with file data:', updateError);
+                toast({
+                  title: "Ostrzeżenie",
+                  description: "Produkt został dodany, ale plik nie został zapisany",
+                  variant: "destructive",
+                });
+              } else {
+                console.log('File saved to custom_description as fallback');
+              }
             }
           } catch (error) {
             console.error('Error processing file:', error);
@@ -1510,7 +1537,11 @@ interface WarehouseTileProps {
                     </div>
                     
                     {/* File preview buttons for file products */}
-                    {item.is_custom && (item.project_files?.length > 0 || item.custom_description?.startsWith('data:')) && (
+                    {(() => {
+                      const hasFileData = item.project_files?.length > 0 || item.custom_description?.startsWith('data:');
+                      const hasFileExtension = item.custom_name && /\.(pdf|jpg|jpeg|png|bmp|gif|tiff|doc|docx|txt)$/i.test(item.custom_name);
+                      return item.is_custom && (hasFileData || hasFileExtension);
+                    })() && (
                       <div className="flex items-center gap-1 ml-2">
                         <Button
                           variant="ghost"
@@ -1561,6 +1592,11 @@ interface WarehouseTileProps {
                               } catch (error) {
                                 console.error('Error converting base64 to file:', error);
                               }
+                            } 
+                            // If no file data but has file extension, show error
+                            else if (item.custom_name && /\.(pdf|jpg|jpeg|png|bmp|gif|tiff|doc|docx|txt)$/i.test(item.custom_name)) {
+                              alert(`Plik "${item.custom_name}" nie ma danych do podglądu. Dane pliku mogły zostać utracone.`);
+                              return;
                             } else {
                               return;
                             }
@@ -1599,6 +1635,11 @@ interface WarehouseTileProps {
                               fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
                               fileName = item.custom_name || 'Nieznany plik';
                               fileUrl = item.custom_description;
+                            } 
+                            // If no file data but has file extension, show error
+                            else if (item.custom_name && /\.(pdf|jpg|jpeg|png|bmp|gif|tiff|doc|docx|txt)$/i.test(item.custom_name)) {
+                              alert(`Plik "${item.custom_name}" nie ma danych do wydruku. Dane pliku mogły zostać utracone.`);
+                              return;
                             } else {
                               return;
                             }
