@@ -1247,13 +1247,14 @@ interface WarehouseTileProps {
     };
 
     return (
-      <Card 
-        ref={dropWarehouse}
-        className={`min-w-[200px] max-w-[250px] transition-all duration-200 ${
-          isOverWarehouse ? 'bg-primary/5 border-primary' : 'hover:bg-muted/50'
-        }`}
-        style={getGlowStyle()}
-      >
+      <>
+        <Card 
+          ref={dropWarehouse}
+          className={`min-w-[200px] max-w-[250px] transition-all duration-200 ${
+            isOverWarehouse ? 'bg-primary/5 border-primary' : 'hover:bg-muted/50'
+          }`}
+          style={getGlowStyle()}
+        >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -1447,6 +1448,7 @@ interface WarehouseTileProps {
           fileData={previewFile.fileData}
         />
       )}
+      </>
     );
   }
 
