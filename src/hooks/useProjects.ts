@@ -35,6 +35,31 @@ export interface DatabaseProject {
   color?: string;
 }
 
+// Helper functions for localStorage
+const saveProjectsToStorage = (projects: DatabaseProject[]) => {
+  try {
+    localStorage.setItem('projects_colors', JSON.stringify(projects.map(p => ({ id: p.id, color: p.color }))));
+  } catch (error) {
+    console.warn('Failed to save projects colors to localStorage:', error);
+  }
+};
+
+const loadProjectsFromStorage = (): Record<string, string> => {
+  try {
+    const stored = localStorage.getItem('projects_colors');
+    if (stored) {
+      const colors = JSON.parse(stored);
+      return colors.reduce((acc: Record<string, string>, item: { id: string, color: string }) => {
+        acc[item.id] = item.color;
+        return acc;
+      }, {});
+    }
+  } catch (error) {
+    console.warn('Failed to load projects colors from localStorage:', error);
+  }
+  return {};
+};
+
 export const useProjects = () => {
   const [projects, setProjects] = useState<DatabaseProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,22 +73,19 @@ export const useProjects = () => {
 
       if (error) throw error;
       
-      // Preserve existing colors from local state when fetching from database
-      setProjects(prevProjects => {
-        const newProjects = data?.map(project => {
-          // Find existing project in local state to preserve its color
-          const existingProject = prevProjects.find(p => p.id === project.id);
-          const existingColor = existingProject?.color;
-          
-          return {
-            ...project,
-            status: project.status as 'active' | 'completed' | 'pending',
-            color: existingColor || project.color || '#3b82f6' // Use existing color, then DB color, then default
-          };
-        }) || [];
-        
-        return newProjects;
-      });
+      // Load colors from localStorage
+      const storedColors = loadProjectsFromStorage();
+      
+      const newProjects = data?.map(project => ({
+        ...project,
+        status: project.status as 'active' | 'completed' | 'pending',
+        color: storedColors[project.id] || project.color || '#3b82f6' // Use stored color, then DB color, then default
+      })) || [];
+      
+      setProjects(newProjects);
+      
+      // Save colors to localStorage
+      saveProjectsToStorage(newProjects);
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast({
@@ -92,7 +114,9 @@ export const useProjects = () => {
       // Add default color if not provided
       const projectWithColor = { ...data, color: color || '#3b82f6' };
       
-      setProjects(prev => [{ ...projectWithColor, status: data.status as 'active' | 'completed' | 'pending' }, ...prev]);
+      const newProjects = [{ ...projectWithColor, status: data.status as 'active' | 'completed' | 'pending' }, ...projects];
+      setProjects(newProjects);
+      saveProjectsToStorage(newProjects);
       toast({
         title: "Sukces",
         description: "Projekt został utworzony"
@@ -131,7 +155,9 @@ export const useProjects = () => {
       const finalColor = color || existingColor;
       const dataWithColor = { ...data, color: finalColor };
 
-      setProjects(prev => prev.map(p => p.id === id ? { ...dataWithColor, status: data.status as 'active' | 'completed' | 'pending' } : p));
+      const newProjects = projects.map(p => p.id === id ? { ...dataWithColor, status: data.status as 'active' | 'completed' | 'pending' } : p);
+      setProjects(newProjects);
+      saveProjectsToStorage(newProjects);
       toast({
         title: "Sukces",
         description: "Projekt został zaktualizowany"
@@ -262,7 +288,9 @@ export const useProjects = () => {
         if (insertDestError) throw insertDestError;
       }
 
-      setProjects(prev => [{ ...newProjectWithColor, status: newProjectWithColor.status as 'active' | 'completed' | 'pending' }, ...prev]);
+      const newProjects = [{ ...newProjectWithColor, status: newProjectWithColor.status as 'active' | 'completed' | 'pending' }, ...projects];
+      setProjects(newProjects);
+      saveProjectsToStorage(newProjects);
       toast({
         title: "Sukces",
         description: "Projekt wysyłki powrotnej został utworzony"
