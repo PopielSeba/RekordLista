@@ -217,6 +217,7 @@ const DepartmentTile = ({
   const [customEquipmentDescription, setCustomEquipmentDescription] = useState('');
   const [equipmentMode, setEquipmentMode] = useState<'existing' | 'custom' | 'file' | 'pdf'>('existing');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [{ isOverDept }, dropDept] = useDrop({
     accept: [ITEM_TYPES.EQUIPMENT, ITEM_TYPES.PROJECT_EQUIPMENT],
@@ -300,12 +301,35 @@ const DepartmentTile = ({
 
         const fileTypeDescription = getFileTypeDescription(fileExtension || '');
         
+        // Convert file to base64 if available
+        let fileDataBase64 = '';
+        if (selectedFile) {
+          try {
+            fileDataBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                resolve(e.target?.result as string);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(selectedFile);
+            });
+          } catch (error) {
+            console.error('Error converting file to base64:', error);
+            toast({
+              title: "Błąd",
+              description: "Nie udało się przetworzyć pliku",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+        
         // Add file as custom equipment
         const equipmentData = {
           project_id: projectId,
           department_id: department.id,
           custom_name: selectedEquipment.trim(),
-          custom_description: selectedEquipmentDescription.trim() || fileTypeDescription,
+          custom_description: fileDataBase64 || selectedEquipmentDescription.trim() || fileTypeDescription,
           quantity: 1,
           is_custom: true,
           status: 'pending'
@@ -870,6 +894,7 @@ const DepartmentTile = ({
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              setSelectedFile(file);
                               setSelectedEquipment(file.name);
                             }
                           }}
@@ -1175,16 +1200,9 @@ interface WarehouseTileProps {
       const isFromWarehouse = item.projectEquipment.intermediate_warehouse_id;
       const isToWarehouse = warehouse?.id;
       
-      // If moving from one warehouse to another, allow it
+      // If moving from one warehouse to another, allow it regardless of status
       if (isFromWarehouse && isToWarehouse && isFromWarehouse !== isToWarehouse) {
-        if (type === 'pre_coordination') {
-          // Pre-coordination warehouses can accept equipment from any warehouse
-          return item.projectEquipment.status === 'ready' || item.projectEquipment.status === 'delivered';
-        }
-        if (type === 'post_coordination') {
-          // Post-coordination warehouses can accept equipment from any warehouse
-          return item.projectEquipment.status === 'loading' || item.projectEquipment.status === 'delivered';
-        }
+        return true; // Allow any warehouse-to-warehouse movement
       }
       
       // Original logic for equipment coming from departments/coordination/construction site
@@ -1265,8 +1283,8 @@ interface WarehouseTileProps {
           </div>
           <div className="text-center text-xs text-muted-foreground">
             {type === 'pre_coordination' 
-              ? (reverseFlow ? 'Przyjmuje: ZIELONY i FIOLETOWY sprzęt (można przeciągać między magazynami)' : 'Przyjmuje: ZIELONY sprzęt (można przeciągać między magazynami)')
-              : 'Przyjmuje: NIEBIESKI sprzęt (można przeciągać między magazynami)'
+              ? 'Magazyn przed koordynacją (można przeciągać między magazynami)'
+              : 'Magazyn po koordynacji (można przeciągać między magazynami)'
             }
           </div>
         </CardHeader>
@@ -1278,16 +1296,29 @@ interface WarehouseTileProps {
                   <DraggableEquipmentItem
                     item={item}
                     getEquipmentDisplayName={(eq) => (eq.is_custom ? eq.custom_name : eq.equipment?.name) || 'Nieznany sprzęt'}
-                    getStatusLabel={(status) => status === 'ready' ? 'Gotowy (magazyn)' : status === 'loading' ? 'Po koordynacji (magazyn)' : '—'}
-                    getStatusColor={(status) =>
-                      status === 'ready'
-                        ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white border-emerald-600 shadow-emerald-200/50 shadow'
-                        : status === 'loading'
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-blue-200/50 shadow'
-                        : status === 'delivered'
-                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-purple-600 shadow-purple-200/50 shadow'
-                        : 'bg-muted text-foreground'
-                    }
+                    getStatusLabel={(status) => {
+                      switch (status) {
+                        case 'ready': return 'Gotowy (magazyn)';
+                        case 'loading': return 'Po koordynacji (magazyn)';
+                        case 'delivered': return 'Dostarczony (magazyn)';
+                        case 'pending': return 'W przygotowaniu (magazyn)';
+                        default: return 'W magazynie';
+                      }
+                    }}
+                    getStatusColor={(status) => {
+                      switch (status) {
+                        case 'ready':
+                          return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white border-emerald-600 shadow-emerald-200/50 shadow';
+                        case 'loading':
+                          return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-blue-200/50 shadow';
+                        case 'delivered':
+                          return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-purple-600 shadow-purple-200/50 shadow';
+                        case 'pending':
+                          return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-yellow-600 shadow-yellow-200/50 shadow';
+                        default:
+                          return 'bg-muted text-foreground';
+                      }
+                    }}
                     updateEquipmentStatus={() => {}}
                     removeEquipment={removeEquipment || (() => {})}
                     canDeleteEquipment={canDeleteEquipment}
@@ -2633,7 +2664,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
                   onEquipmentMoved={moveEquipment}
                   canManage={canManageCoordination}
                   canDeleteWarehouses={canDeleteWarehouses}
-                  equipment={(projectEquipment || []).filter(eq => (eq.status === 'ready' || (reverseFlow && eq.status === 'delivered')) && eq.intermediate_warehouse_id === warehouse.id && !eq.project_parent_id && !eq.equipment?.parent_id)}
+                  equipment={(projectEquipment || []).filter(eq => eq.intermediate_warehouse_id === warehouse.id && !eq.project_parent_id && !eq.equipment?.parent_id)}
                   allProjectEquipment={projectEquipment || []}
                   reverseFlow={reverseFlow}
                   removeEquipment={removeEquipment}
@@ -2674,7 +2705,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
                   onEquipmentMoved={moveEquipment}
                   canManage={canManageCoordination}
                   canDeleteWarehouses={canDeleteWarehouses}
-                  equipment={(projectEquipment || []).filter(eq => eq.status === 'loading' && eq.intermediate_warehouse_id === warehouse.id && !eq.project_parent_id && !eq.equipment?.parent_id)}
+                  equipment={(projectEquipment || []).filter(eq => eq.intermediate_warehouse_id === warehouse.id && !eq.project_parent_id && !eq.equipment?.parent_id)}
                   allProjectEquipment={projectEquipment || []}
                   reverseFlow={reverseFlow}
                   removeEquipment={removeEquipment}

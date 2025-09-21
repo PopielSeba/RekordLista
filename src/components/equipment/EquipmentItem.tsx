@@ -4,6 +4,7 @@ import { Equipment } from '@/types';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
 
 interface EquipmentItemProps {
   equipment: Equipment;
@@ -16,6 +17,7 @@ interface EquipmentItemProps {
 
 export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStatusChange, canChangeStatus = false, showAccessories = true }: EquipmentItemProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const [{ isDragging }, drag] = useDrag({
     type: 'equipment',
@@ -87,13 +89,51 @@ export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStat
   };
 
   const handleViewFile = () => {
-    // For now, we'll show an alert. In a real implementation, you'd open the file
-    alert('Funkcja podglądu pliku będzie dostępna wkrótce');
+    setIsPreviewOpen(true);
   };
 
   const handlePrintFile = () => {
-    // For now, we'll show an alert. In a real implementation, you'd print the file
-    alert('Funkcja wydruku pliku będzie dostępna wkrótce');
+    setIsPreviewOpen(true);
+  };
+
+  const getFileType = () => {
+    if (!equipment.custom_name) return 'unknown';
+    const extension = equipment.custom_name.split('.').pop()?.toLowerCase();
+    return extension || 'unknown';
+  };
+
+  const getFileUrl = () => {
+    // Extract base64 data from custom_description if it contains file data
+    const description = equipment.custom_description || '';
+    if (description.startsWith('data:')) {
+      return description;
+    }
+    // Fallback to placeholder
+    return `#${equipment.custom_name}`;
+  };
+
+  const getFileData = () => {
+    const description = equipment.custom_description || '';
+    if (description.startsWith('data:')) {
+      // Extract the base64 part after the comma
+      const base64Data = description.split(',')[1];
+      if (base64Data) {
+        try {
+          // Convert base64 to File object
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const mimeType = description.split(';')[0].split(':')[1];
+          return new File([byteArray], equipment.custom_name || 'file', { type: mimeType });
+        } catch (error) {
+          console.error('Error converting base64 to file:', error);
+        }
+      }
+    }
+    return null;
   };
 
   return (
@@ -195,6 +235,18 @@ export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStat
             />
           ))}
         </div>
+      )}
+
+      {/* File Preview Modal */}
+      {isFileProduct() && (
+        <FilePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          fileName={equipment.custom_name || 'Nieznany plik'}
+          fileType={getFileType()}
+          fileUrl={getFileUrl()}
+          fileData={getFileData()}
+        />
       )}
     </div>
   );
