@@ -167,33 +167,16 @@ const DraggableEquipmentItem = ({
             </Button>
           )}
           {/* File preview buttons for file products */}
-          {item.is_custom && item.project_files && item.project_files.length > 0 && (
+          {item.is_custom && item.custom_description?.startsWith('data:') && (
             <>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const file = item.project_files?.[0]; // Get first file
-                  if (!file) return;
-                  
-                  const fileType = file.file_type || 'unknown';
-                  const fileName = file.file_name || 'Nieznany plik';
-                  const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
-                  
-                  // Convert base64 to File object
-                  let fileData: File | null = null;
-                  try {
-                    const byteCharacters = atob(file.file_data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                      byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    fileData = new Blob([byteArray], { type: file.mime_type }) as File;
-                  } catch (error) {
-                    console.error('Error converting base64 to file:', error);
-                  }
+                  const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
+                  const fileName = item.custom_name || 'Nieznany plik';
+                  const fileUrl = item.custom_description || '';
                   
                   // Open in new window
                   const newWindow = window.open('', '_blank');
@@ -231,38 +214,34 @@ const DraggableEquipmentItem = ({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const file = item.project_files?.[0]; // Get first file
-                  if (!file) return;
-                  
-                  const printWindow = window.open('', '_blank');
-                  if (printWindow) {
-                    const fileType = file.file_type;
-                    const fileName = file.file_name;
-                    const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
-                    
-                    if (fileType === 'pdf') {
-                      printWindow.location.href = fileUrl;
-                    } else {
-                      printWindow.document.write(`
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                          <title>Wydruk: ${fileName}</title>
-                          <style>
-                            body { margin: 0; padding: 20px; text-align: center; }
-                            img { max-width: 100%; height: auto; }
-                            @media print { body { margin: 0; } }
-                          </style>
-                        </head>
-                        <body>
-                          <h1>${fileName}</h1>
-                          <img src="${fileUrl}" alt="${fileName}" />
-                        </body>
-                        </html>
-                      `);
-                      printWindow.document.close();
+                  if (item.custom_description?.startsWith('data:')) {
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                      const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
+                      if (fileType === 'pdf') {
+                        printWindow.location.href = item.custom_description;
+                      } else {
+                        printWindow.document.write(`
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <title>Wydruk: ${item.custom_name}</title>
+                            <style>
+                              body { margin: 0; padding: 20px; text-align: center; }
+                              img { max-width: 100%; height: auto; }
+                              @media print { body { margin: 0; } }
+                            </style>
+                          </head>
+                          <body>
+                            <h1>${item.custom_name}</h1>
+                            <img src="${item.custom_description}" alt="${item.custom_name}" />
+                          </body>
+                          </html>
+                        `);
+                        printWindow.document.close();
+                      }
+                      printWindow.print();
                     }
-                    printWindow.print();
                   }
                 }}
                 className="h-7 w-7 p-0 bg-background/30 hover:bg-background/50 border border-background/50 rounded-md"
@@ -443,42 +422,27 @@ const DepartmentTile = ({
           return;
         }
 
-        // Upload file to project_files table if file is selected
+        // Upload file to custom_description if file is selected
         if (selectedFile) {
           try {
-            // Convert file to base64 for storage in project_files table
-            const fileDataBase64 = await new Promise<ArrayBuffer>((resolve, reject) => {
+            // Convert file to base64 for storage in custom_description (temporary solution)
+            const fileDataBase64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = (e) => {
-                resolve(e.target?.result as ArrayBuffer);
+                resolve(e.target?.result as string);
               };
               reader.onerror = reject;
-              reader.readAsArrayBuffer(selectedFile);
+              reader.readAsDataURL(selectedFile);
             });
 
-            // Convert ArrayBuffer to base64
-            const uint8Array = new Uint8Array(fileDataBase64);
-            let binary = '';
-            for (let i = 0; i < uint8Array.byteLength; i++) {
-              binary += String.fromCharCode(uint8Array[i]);
-            }
-            const base64String = btoa(binary);
+            // Update the equipment with file data in custom_description
+            const { error: updateError } = await supabase
+              .from('project_equipment')
+              .update({ custom_description: fileDataBase64 })
+              .eq('id', mainEquipmentResult.id);
 
-            // Insert file into project_files table
-            const { error: fileError } = await supabase
-              .from('project_files')
-              .insert({
-                project_id: projectId,
-                project_equipment_id: mainEquipmentResult.id,
-                file_name: selectedFile.name,
-                file_type: selectedFile.name.split('.').pop()?.toLowerCase() || 'unknown',
-                file_size: selectedFile.size,
-                file_data: base64String,
-                mime_type: selectedFile.type
-              });
-
-            if (fileError) {
-              console.error('Error saving file to project_files:', fileError);
+            if (updateError) {
+              console.error('Error updating equipment with file:', updateError);
               toast({
                 title: "Ostrzeżenie",
                 description: "Produkt został dodany, ale plik nie został zapisany",
@@ -1495,31 +1459,32 @@ interface WarehouseTileProps {
                     </div>
                     
                     {/* File preview buttons for file products */}
-                    {item.is_custom && item.project_files && item.project_files.length > 0 && (
+                    {item.is_custom && item.custom_description?.startsWith('data:') && (
                       <div className="flex items-center gap-1 ml-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            const file = item.project_files?.[0]; // Get first file
-                            if (!file) return;
-                            
-                            const fileType = file.file_type || 'unknown';
-                            const fileName = file.file_name || 'Nieznany plik';
-                            const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
+                            const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
+                            const fileName = item.custom_name || 'Nieznany plik';
+                            const fileUrl = item.custom_description || '';
                             
                             // Convert base64 to File object
                             let fileData: File | null = null;
-                            try {
-                              const byteCharacters = atob(file.file_data);
-                              const byteNumbers = new Array(byteCharacters.length);
-                              for (let i = 0; i < byteCharacters.length; i++) {
-                                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            if (fileUrl.startsWith('data:')) {
+                              try {
+                                const base64Data = fileUrl.split(',')[1];
+                                const mimeType = fileUrl.split(';')[0].split(':')[1];
+                                const byteCharacters = atob(base64Data);
+                                const byteNumbers = new Array(byteCharacters.length);
+                                for (let i = 0; i < byteCharacters.length; i++) {
+                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                }
+                                const byteArray = new Uint8Array(byteNumbers);
+                                fileData = new Blob([byteArray], { type: mimeType }) as File;
+                              } catch (error) {
+                                console.error('Error converting base64 to file:', error);
                               }
-                              const byteArray = new Uint8Array(byteNumbers);
-                              fileData = new Blob([byteArray], { type: file.mime_type }) as File;
-                            } catch (error) {
-                              console.error('Error converting base64 to file:', error);
                             }
                             
                             setPreviewFile({
@@ -1540,38 +1505,34 @@ interface WarehouseTileProps {
                           size="sm"
                           onClick={() => {
                             // Handle print
-                            const file = item.project_files?.[0]; // Get first file
-                            if (!file) return;
-                            
-                            const printWindow = window.open('', '_blank');
-                            if (printWindow) {
-                              const fileType = file.file_type;
-                              const fileName = file.file_name;
-                              const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
-                              
-                              if (fileType === 'pdf') {
-                                printWindow.location.href = fileUrl;
-                              } else {
-                                printWindow.document.write(`
-                                  <!DOCTYPE html>
-                                  <html>
-                                  <head>
-                                    <title>Wydruk: ${fileName}</title>
-                                    <style>
-                                      body { margin: 0; padding: 20px; text-align: center; }
-                                      img { max-width: 100%; height: auto; }
-                                      @media print { body { margin: 0; } }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <h1>${fileName}</h1>
-                                    <img src="${fileUrl}" alt="${fileName}" />
-                                  </body>
-                                  </html>
-                                `);
-                                printWindow.document.close();
+                            if (item.custom_description?.startsWith('data:')) {
+                              const printWindow = window.open('', '_blank');
+                              if (printWindow) {
+                                const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
+                                if (fileType === 'pdf') {
+                                  printWindow.location.href = item.custom_description;
+                                } else {
+                                  printWindow.document.write(`
+                                    <!DOCTYPE html>
+                                    <html>
+                                    <head>
+                                      <title>Wydruk: ${item.custom_name}</title>
+                                      <style>
+                                        body { margin: 0; padding: 20px; text-align: center; }
+                                        img { max-width: 100%; height: auto; }
+                                        @media print { body { margin: 0; } }
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <h1>${item.custom_name}</h1>
+                                      <img src="${item.custom_description}" alt="${item.custom_name}" />
+                                    </body>
+                                    </html>
+                                  `);
+                                  printWindow.document.close();
+                                }
+                                printWindow.print();
                               }
-                              printWindow.print();
                             }
                           }}
                           className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
@@ -2431,8 +2392,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
       .from('project_equipment')
       .select(`
         *,
-        equipment:equipment(*),
-        project_files:project_files(*)
+        equipment:equipment(*)
       `)
       .eq('project_id', projectId)
       .order('created_at', { ascending: true });
