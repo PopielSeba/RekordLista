@@ -140,25 +140,94 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         
-        // Look for equipment names in the data
-        jsonData.forEach((row: any[], rowIndex: number) => {
-          row.forEach((cell: any, colIndex: number) => {
-            if (typeof cell === 'string' && cell.trim()) {
-              const trimmedCell = cell.trim();
-              // Simple heuristic: look for strings that might be equipment names
-              if (trimmedCell.length > 3 && 
-                  !trimmedCell.match(/^\d+$/) && // Not just numbers
-                  !trimmedCell.match(/^[A-Za-z]\d+$/) && // Not just codes
-                  trimmedCell.length < 100) { // Not too long
-                equipment.push({
-                  name: trimmedCell,
-                  confidence: 0.8,
-                  source: 'excel'
-                });
+        if (jsonData.length === 0) return;
+        
+        // Look for table headers to find the "Nazwa" column
+        let nazwaColumnIndex = -1;
+        let headerRowIndex = -1;
+        
+        // Check first few rows for headers
+        for (let rowIndex = 0; rowIndex < Math.min(3, jsonData.length); rowIndex++) {
+          const row = jsonData[rowIndex] as any[];
+          if (!row) continue;
+          
+          for (let colIndex = 0; colIndex < row.length; colIndex++) {
+            const cell = row[colIndex];
+            if (typeof cell === 'string') {
+              const lowerCell = cell.toLowerCase().trim();
+              if (['nazwa', 'name', 'artykuł', 'article', 'sprzęt', 'equipment', 'produkt', 'product'].includes(lowerCell)) {
+                nazwaColumnIndex = colIndex;
+                headerRowIndex = rowIndex;
+                break;
               }
             }
+          }
+          if (nazwaColumnIndex !== -1) break;
+        }
+        
+        // If we found a header row, process data rows
+        if (nazwaColumnIndex !== -1 && headerRowIndex !== -1) {
+          for (let rowIndex = headerRowIndex + 1; rowIndex < jsonData.length; rowIndex++) {
+            const row = jsonData[rowIndex] as any[];
+            if (!row || row.length <= nazwaColumnIndex) continue;
+            
+            const cell = row[nazwaColumnIndex];
+            if (typeof cell === 'string' && cell.trim()) {
+              const trimmedCell = cell.trim();
+              
+              // Validate that this looks like an equipment name
+              if (trimmedCell.length > 3 && 
+                  trimmedCell.length < 100 &&
+                  !trimmedCell.match(/^\d+$/) && // Not just numbers
+                  !trimmedCell.match(/^\d+[.,]\d+$/) && // Not decimal numbers
+                  !['lp', 'l.p', 'nazwa', 'name', 'kod', 'code', 'ilość', 'quantity', 'jm', 'jednostka', 'szt', 'sztuki'].includes(trimmedCell.toLowerCase())
+              ) {
+                // Check if we already have this equipment (avoid duplicates)
+                const exists = equipment.some(eq => 
+                  eq.name.toLowerCase() === trimmedCell.toLowerCase()
+                );
+                
+                if (!exists) {
+                  equipment.push({
+                    name: trimmedCell,
+                    confidence: 0.9,
+                    source: 'excel'
+                  });
+                }
+              }
+            }
+          }
+        } else {
+          // Fallback: look for equipment names in all cells
+          jsonData.forEach((row: any[], rowIndex: number) => {
+            row.forEach((cell: any, colIndex: number) => {
+              if (typeof cell === 'string' && cell.trim()) {
+                const trimmedCell = cell.trim();
+                // Simple heuristic: look for strings that might be equipment names
+                if (trimmedCell.length > 3 && 
+                    !trimmedCell.match(/^\d+$/) && // Not just numbers
+                    !trimmedCell.match(/^[A-Za-z]\d+$/) && // Not just codes
+                    !trimmedCell.match(/^\d+[.,]\d+$/) && // Not decimal numbers
+                    trimmedCell.length < 100 && // Not too long
+                    !['lp', 'l.p', 'nazwa', 'name', 'kod', 'code', 'ilość', 'quantity', 'jm', 'jednostka', 'szt', 'sztuki'].includes(trimmedCell.toLowerCase())
+                ) {
+                  // Check if we already have this equipment (avoid duplicates)
+                  const exists = equipment.some(eq => 
+                    eq.name.toLowerCase() === trimmedCell.toLowerCase()
+                  );
+                  
+                  if (!exists) {
+                    equipment.push({
+                      name: trimmedCell,
+                      confidence: 0.7,
+                      source: 'excel'
+                    });
+                  }
+                }
+              }
+            });
           });
-        });
+        }
       });
 
       setProgress(80);
@@ -175,40 +244,154 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
     // Split text into lines and look for potential equipment names
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    lines.forEach(line => {
-      // Look for patterns that might indicate equipment names
-      const words = line.split(/\s+/);
+    // Look for table structure patterns
+    let inTable = false;
+    let tableHeaderFound = false;
+    let columnIndex = -1;
+    
+    // Common table headers in Polish
+    const tableHeaders = ['nazwa', 'name', 'artykuł', 'article', 'sprzęt', 'equipment', 'produkt', 'product'];
+    const quantityHeaders = ['ilość', 'quantity', 'qty', 'szt', 'sztuki', 'pieces'];
+    const codeHeaders = ['kod', 'code', 'nr', 'number', 'id'];
+    
+    lines.forEach((line, lineIndex) => {
+      const lowerLine = line.toLowerCase();
       
-      // Check if line contains equipment-like patterns
-      if (words.length >= 1 && words.length <= 5) {
-        const potentialName = words.join(' ');
+      // Check if this line contains table headers
+      if (!tableHeaderFound && (
+        tableHeaders.some(header => lowerLine.includes(header)) ||
+        lowerLine.includes('lp.') || lowerLine.includes('l.p.') ||
+        lowerLine.includes('jednostka') || lowerLine.includes('jm')
+      )) {
+        tableHeaderFound = true;
+        inTable = true;
         
-        // Filter out common non-equipment words
-        const excludeWords = [
-          'strona', 'page', 'data', 'date', 'nr', 'no', 'ilość', 'quantity',
-          'cena', 'price', 'suma', 'total', 'razem', 'together', 'spis', 'list',
-          'nazwa', 'name', 'opis', 'description', 'uwagi', 'notes', 'uwaga', 'note'
-        ];
-        
-        const isExcluded = excludeWords.some(word => 
-          potentialName.toLowerCase().includes(word.toLowerCase())
+        // Try to find the "Nazwa" column index
+        const words = line.split(/\s+/);
+        const nazwaIndex = words.findIndex(word => 
+          ['nazwa', 'name', 'artykuł', 'article', 'sprzęt', 'equipment'].includes(word.toLowerCase())
         );
+        if (nazwaIndex !== -1) {
+          columnIndex = nazwaIndex;
+        }
+        return;
+      }
+      
+      // If we're in a table, look for data rows
+      if (inTable && tableHeaderFound) {
+        // Skip empty lines
+        if (line.length < 3) return;
         
-        if (!isExcluded && 
-            potentialName.length > 3 && 
-            potentialName.length < 100 &&
-            !potentialName.match(/^\d+$/) &&
-            !potentialName.match(/^[A-Za-z]\d+$/) &&
-            !potentialName.match(/^\d+[.,]\d+$/) // Not just numbers with decimals
-        ) {
-          equipment.push({
-            name: potentialName,
-            confidence: source === 'pdf-text' ? 0.9 : 0.7,
-            source
-          });
+        // Check if this looks like a data row (contains numbers and text)
+        const words = line.split(/\s+/);
+        
+        // Look for patterns that suggest this is a table row
+        const hasNumber = words.some(word => /^\d+$/.test(word)); // Contains numbers
+        const hasText = words.some(word => /[a-zA-Z]/.test(word)); // Contains letters
+        const hasCodePattern = words.some(word => /^\d+\.\d+\.\d+\.\d+/.test(word)); // Contains code pattern like 03.07.01.00075
+        
+        if (hasNumber && hasText && words.length >= 3) {
+          // This looks like a table row
+          let equipmentName = '';
+          
+          if (columnIndex !== -1 && words[columnIndex]) {
+            // Use the column index we found
+            equipmentName = words[columnIndex];
+          } else {
+            // Try to find equipment name by looking for patterns
+            // Equipment names often start with letters and contain numbers
+            const potentialNames = words.filter(word => 
+              /^[A-Za-z]/.test(word) && // Starts with letter
+              word.length > 3 && // Not too short
+              !/^\d+$/.test(word) && // Not just numbers
+              !/^\d+[.,]\d+$/.test(word) && // Not decimal numbers
+              !['szt', 'sztuki', 'pieces', 'ilość', 'quantity'].includes(word.toLowerCase()) // Not quantity units
+            );
+            
+            if (potentialNames.length > 0) {
+              // Take the first potential name, or join multiple if they seem related
+              equipmentName = potentialNames[0];
+              
+              // If there are multiple potential names and they seem related, join them
+              if (potentialNames.length > 1) {
+                const joined = potentialNames.join(' ');
+                if (joined.length < 50) { // Reasonable length
+                  equipmentName = joined;
+                }
+              }
+            }
+          }
+          
+          // Additional validation for equipment names
+          if (equipmentName && 
+              equipmentName.length > 3 && 
+              equipmentName.length < 100 &&
+              !equipmentName.match(/^\d+$/) &&
+              !equipmentName.match(/^\d+[.,]\d+$/) &&
+              !['lp', 'l.p', 'nazwa', 'name', 'kod', 'code', 'ilość', 'quantity', 'jm', 'jednostka'].includes(equipmentName.toLowerCase())
+          ) {
+            // Clean up the name (remove extra spaces, etc.)
+            const cleanName = equipmentName.trim().replace(/\s+/g, ' ');
+            
+            // Check if we already have this equipment (avoid duplicates)
+            const exists = equipment.some(eq => 
+              eq.name.toLowerCase() === cleanName.toLowerCase()
+            );
+            
+            if (!exists) {
+              equipment.push({
+                name: cleanName,
+                confidence: source === 'pdf-text' ? 0.9 : 0.7,
+                source
+              });
+            }
+          }
         }
       }
+      
+      // Reset table detection if we hit an empty line or non-table content
+      if (inTable && line.length < 3) {
+        inTable = false;
+        tableHeaderFound = false;
+        columnIndex = -1;
+      }
     });
+    
+    // If we didn't find any equipment using table detection, fall back to the original method
+    if (equipment.length === 0) {
+      lines.forEach(line => {
+        const words = line.split(/\s+/);
+        
+        if (words.length >= 1 && words.length <= 5) {
+          const potentialName = words.join(' ');
+          
+          const excludeWords = [
+            'strona', 'page', 'data', 'date', 'nr', 'no', 'ilość', 'quantity',
+            'cena', 'price', 'suma', 'total', 'razem', 'together', 'spis', 'list',
+            'nazwa', 'name', 'opis', 'description', 'uwagi', 'notes', 'uwaga', 'note',
+            'lp', 'l.p', 'kod', 'code', 'jm', 'jednostka', 'szt', 'sztuki'
+          ];
+          
+          const isExcluded = excludeWords.some(word => 
+            potentialName.toLowerCase().includes(word.toLowerCase())
+          );
+          
+          if (!isExcluded && 
+              potentialName.length > 3 && 
+              potentialName.length < 100 &&
+              !potentialName.match(/^\d+$/) &&
+              !potentialName.match(/^[A-Za-z]\d+$/) &&
+              !potentialName.match(/^\d+[.,]\d+$/)
+          ) {
+            equipment.push({
+              name: potentialName,
+              confidence: source === 'pdf-text' ? 0.8 : 0.6,
+              source
+            });
+          }
+        }
+      });
+    }
     
     return equipment;
   };
