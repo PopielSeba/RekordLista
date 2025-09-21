@@ -63,7 +63,13 @@ export const AdminProjects = () => {
   };
 
   const handleCreate = async () => {
-    const result = await createProject(formData);
+    // Prepare data for creation - convert empty strings to null for date fields
+    const createData = {
+      ...formData,
+      end_date: formData.end_date || null
+    };
+    
+    const result = await createProject(createData);
     if (result.success) {
       setIsCreateDialogOpen(false);
       resetForm();
@@ -86,7 +92,14 @@ export const AdminProjects = () => {
 
   const handleUpdate = async () => {
     if (!editingProject) return;
-    const result = await updateProject(editingProject.id, formData);
+    
+    // Prepare data for update - convert empty strings to null for date fields
+    const updateData = {
+      ...formData,
+      end_date: formData.end_date || null
+    };
+    
+    const result = await updateProject(editingProject.id, updateData);
     if (result.success) {
       setIsEditDialogOpen(false);
       setEditingProject(null);
