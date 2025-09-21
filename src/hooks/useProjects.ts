@@ -49,7 +49,8 @@ export const useProjects = () => {
       if (error) throw error;
       setProjects(data?.map(project => ({
         ...project,
-        status: project.status as 'active' | 'completed' | 'pending'
+        status: project.status as 'active' | 'completed' | 'pending',
+        color: project.color || '#3b82f6' // Add default color if not present
       })) || []);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -65,20 +66,26 @@ export const useProjects = () => {
 
   const createProject = async (projectData: Omit<DatabaseProject, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      // Remove color field if it exists, as the column might not exist in the database yet
+      const { color, ...projectDataWithoutColor } = projectData as any;
+      
       const { data, error } = await supabase
         .from('projects')
-        .insert([projectData])
+        .insert([projectDataWithoutColor])
         .select()
         .single();
 
       if (error) throw error;
       
-      setProjects(prev => [{ ...data, status: data.status as 'active' | 'completed' | 'pending' }, ...prev]);
+      // Add default color if not provided
+      const projectWithColor = { ...data, color: color || '#3b82f6' };
+      
+      setProjects(prev => [{ ...projectWithColor, status: data.status as 'active' | 'completed' | 'pending' }, ...prev]);
       toast({
         title: "Sukces",
         description: "Projekt został utworzony"
       });
-      return { success: true, data };
+      return { success: true, data: projectWithColor };
     } catch (error) {
       console.error('Error creating project:', error);
       toast({
@@ -92,21 +99,27 @@ export const useProjects = () => {
 
   const updateProject = async (id: string, updates: Partial<DatabaseProject>) => {
     try {
+      // Remove color field if it exists, as the column might not exist in the database yet
+      const { color, ...updatesWithoutColor } = updates as any;
+      
       const { data, error } = await supabase
         .from('projects')
-        .update(updates)
+        .update(updatesWithoutColor)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
+      
+      // Add color back to the data if it was provided
+      const dataWithColor = color ? { ...data, color } : { ...data, color: '#3b82f6' };
 
-      setProjects(prev => prev.map(p => p.id === id ? { ...data, status: data.status as 'active' | 'completed' | 'pending' } : p));
+      setProjects(prev => prev.map(p => p.id === id ? { ...dataWithColor, status: data.status as 'active' | 'completed' | 'pending' } : p));
       toast({
         title: "Sukces",
         description: "Projekt został zaktualizowany"
       });
-      return { success: true, data };
+      return { success: true, data: dataWithColor };
     } catch (error) {
       console.error('Error updating project:', error);
       toast({
