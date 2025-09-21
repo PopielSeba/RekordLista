@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -984,6 +984,9 @@ const DepartmentTile = ({
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Dodaj sprzęt do działu {department.name}</DialogTitle>
+                  <DialogDescription>
+                    Wybierz sprzęt z listy dostępnego sprzętu i dodaj go do tego działu.
+                  </DialogDescription>
                 </DialogHeader>
                 
                 <Tabs value={equipmentMode} onValueChange={(value) => setEquipmentMode(value as 'existing' | 'custom' | 'file' | 'pdf')}>
@@ -1246,6 +1249,9 @@ const AddDepartmentTile = ({ onAddDepartment, availableDepartments, canAdd }: Ad
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Dodaj dział do projektu</DialogTitle>
+          <DialogDescription>
+            Utwórz nowy dział w projekcie, aby zorganizować sprzęt według kategorii.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -1793,6 +1799,9 @@ interface WarehouseTileProps {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Dodaj magazyn pośredni</DialogTitle>
+          <DialogDescription>
+            Utwórz nowy magazyn pośredni, aby zorganizować sprzęt przed wysyłką.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -2455,6 +2464,12 @@ const AddWarehouseTile = ({ type, onAdd }: AddWarehouseTileProps) => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Dodaj {getTitle()}</DialogTitle>
+            <DialogDescription>
+              {type === 'destination' 
+                ? 'Dodaj nowe miejsce docelowe dla sprzętu.' 
+                : 'Dodaj nowy magazyn pośredni do projektu.'
+              }
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Input
