@@ -16,6 +16,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { ConstructionSiteArea } from '../warehouse/ConstructionSiteArea';
 import { EquipmentItem } from '../equipment/EquipmentItem';
+import { FileUploadParser } from '../equipment/FileUploadParser';
 import { Equipment, ProjectEquipment } from '@/types';
 
 interface Department {
@@ -214,7 +215,7 @@ const DepartmentTile = ({
   const [selectedEquipmentDescription, setSelectedEquipmentDescription] = useState('');
   const [customEquipmentName, setCustomEquipmentName] = useState('');
   const [customEquipmentDescription, setCustomEquipmentDescription] = useState('');
-  const [equipmentMode, setEquipmentMode] = useState<'existing' | 'custom'>('existing');
+  const [equipmentMode, setEquipmentMode] = useState<'existing' | 'custom' | 'file'>('existing');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const [{ isOverDept }, dropDept] = useDrop({
@@ -257,6 +258,14 @@ const DepartmentTile = ({
           title: "Błąd",
           description: "Podaj nazwę sprzętu",
           variant: "destructive",
+        });
+        return;
+      }
+
+      if (equipmentMode === 'file') {
+        toast({
+          title: "Informacja",
+          description: "Użyj opcji 'Z pliku' aby zaimportować sprzęt z pliku",
         });
         return;
       }
@@ -649,10 +658,11 @@ const DepartmentTile = ({
                   <DialogTitle>Dodaj sprzęt do działu {department.name}</DialogTitle>
                 </DialogHeader>
                 
-                <Tabs value={equipmentMode} onValueChange={(value) => setEquipmentMode(value as 'existing' | 'custom')}>
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs value={equipmentMode} onValueChange={(value) => setEquipmentMode(value as 'existing' | 'custom' | 'file')}>
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="existing">Z listy</TabsTrigger>
                     <TabsTrigger value="custom">Nowy</TabsTrigger>
+                    <TabsTrigger value="file">Z pliku</TabsTrigger>
                   </TabsList>
                   
                    <TabsContent value="existing" className="space-y-4">
@@ -698,6 +708,70 @@ const DepartmentTile = ({
                         placeholder="Wprowadź opis..."
                       />
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="file" className="space-y-4">
+                    <FileUploadParser
+                      onEquipmentParsed={async (parsedEquipment) => {
+                        try {
+                          // Add each parsed equipment as custom equipment
+                          for (const item of parsedEquipment) {
+                            const equipmentData = {
+                              project_id: projectId,
+                              department_id: department.id,
+                              custom_name: item.name,
+                              custom_description: `Zaimportowane z pliku (${item.source})`,
+                              quantity: 1,
+                              is_custom: true,
+                              status: 'pending'
+                            };
+
+                            const { data: mainEquipmentResult, error: mainError } = await supabase
+                              .from('project_equipment')
+                              .insert(equipmentData)
+                              .select()
+                              .single();
+
+                            if (mainError) {
+                              console.error('Error adding equipment:', mainError);
+                              continue;
+                            }
+
+                            // Log equipment addition
+                            await supabase.rpc('log_equipment_action', {
+                              _project_id: projectId,
+                              _action_type: 'added',
+                              _equipment_id: null,
+                              _project_equipment_id: mainEquipmentResult.id,
+                              _new_value: item.name,
+                              _details: {
+                                department: department.name,
+                                department_id: department.id,
+                                status: 'pending',
+                                description: `Zaimportowane z pliku (${item.source})`,
+                                confidence: item.confidence
+                              }
+                            });
+                          }
+
+                          toast({
+                            title: "Sukces",
+                            description: `Dodano ${parsedEquipment.length} artykułów z pliku`,
+                          });
+
+                          onEquipmentAdded();
+                          setIsEquipmentDialogOpen(false);
+                        } catch (error: any) {
+                          console.error('Error adding equipment from file:', error);
+                          toast({
+                            title: "Błąd",
+                            description: "Nie udało się dodać wszystkich artykułów z pliku",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      onClose={() => setIsEquipmentDialogOpen(false)}
+                    />
                   </TabsContent>
                 </Tabs>
 
