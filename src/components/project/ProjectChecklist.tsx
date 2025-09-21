@@ -167,16 +167,19 @@ const DraggableEquipmentItem = ({
             </Button>
           )}
           {/* File preview buttons for file products */}
-          {item.is_custom && item.custom_description?.startsWith('data:') && (
+          {item.is_custom && item.project_files && item.project_files.length > 0 && (
             <>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
-                  const fileName = item.custom_name || 'Nieznany plik';
-                  const fileUrl = item.custom_description || '';
+                  const file = item.project_files?.[0]; // Get first file
+                  if (!file) return;
+                  
+                  const fileType = file.file_type || 'unknown';
+                  const fileName = file.file_name || 'Nieznany plik';
+                  const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
                   
                   // Open in new window
                   const newWindow = window.open('', '_blank');
@@ -214,34 +217,38 @@ const DraggableEquipmentItem = ({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (item.custom_description?.startsWith('data:')) {
-                    const printWindow = window.open('', '_blank');
-                    if (printWindow) {
-                      const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
-                      if (fileType === 'pdf') {
-                        printWindow.location.href = item.custom_description;
-                      } else {
-                        printWindow.document.write(`
-                          <!DOCTYPE html>
-                          <html>
-                          <head>
-                            <title>Wydruk: ${item.custom_name}</title>
-                            <style>
-                              body { margin: 0; padding: 20px; text-align: center; }
-                              img { max-width: 100%; height: auto; }
-                              @media print { body { margin: 0; } }
-                            </style>
-                          </head>
-                          <body>
-                            <h1>${item.custom_name}</h1>
-                            <img src="${item.custom_description}" alt="${item.custom_name}" />
-                          </body>
-                          </html>
-                        `);
-                        printWindow.document.close();
-                      }
-                      printWindow.print();
+                  const file = item.project_files?.[0]; // Get first file
+                  if (!file) return;
+                  
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    const fileType = file.file_type;
+                    const fileName = file.file_name;
+                    const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
+                    
+                    if (fileType === 'pdf') {
+                      printWindow.location.href = fileUrl;
+                    } else {
+                      printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <title>Wydruk: ${fileName}</title>
+                          <style>
+                            body { margin: 0; padding: 20px; text-align: center; }
+                            img { max-width: 100%; height: auto; }
+                            @media print { body { margin: 0; } }
+                          </style>
+                        </head>
+                        <body>
+                          <h1>${fileName}</h1>
+                          <img src="${fileUrl}" alt="${fileName}" />
+                        </body>
+                        </html>
+                      `);
+                      printWindow.document.close();
                     }
+                    printWindow.print();
                   }
                 }}
                 className="h-7 w-7 p-0 bg-background/30 hover:bg-background/50 border border-background/50 rounded-md"
@@ -422,27 +429,43 @@ const DepartmentTile = ({
           return;
         }
 
-        // Upload file to custom_description if file is selected
+        // Upload file to project_files table if file is selected
         if (selectedFile) {
           try {
-            // Convert file to base64 for storage in custom_description (temporary solution)
-            const fileDataBase64 = await new Promise<string>((resolve, reject) => {
+            // Convert file to base64 for storage in project_files table
+            const fileDataBase64 = await new Promise<ArrayBuffer>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = (e) => {
-                resolve(e.target?.result as string);
+                resolve(e.target?.result as ArrayBuffer);
               };
               reader.onerror = reject;
-              reader.readAsDataURL(selectedFile);
+              reader.readAsArrayBuffer(selectedFile);
             });
 
-            // Update the equipment with file data in custom_description
-            const { error: updateError } = await supabase
-              .from('project_equipment')
-              .update({ custom_description: fileDataBase64 })
-              .eq('id', mainEquipmentResult.id);
+            // Convert ArrayBuffer to base64
+            const uint8Array = new Uint8Array(fileDataBase64);
+            let binary = '';
+            for (let i = 0; i < uint8Array.byteLength; i++) {
+              binary += String.fromCharCode(uint8Array[i]);
+            }
+            const base64String = btoa(binary);
 
-            if (updateError) {
-              console.error('Error updating equipment with file:', updateError);
+            // Insert file into project_files table
+            const { error: fileError } = await supabase
+              .from('project_files')
+              .insert({
+                project_id: projectId,
+                project_equipment_id: mainEquipmentResult.id,
+                file_name: selectedFile.name,
+                file_type: selectedFile.name.split('.').pop()?.toLowerCase() || 'unknown',
+                file_size: selectedFile.size,
+                file_data: base64String,
+                mime_type: selectedFile.type
+              });
+
+            if (fileError) {
+              console.error('Error saving file to project_files:', fileError);
+              console.error('File error details:', { code: fileError.code, message: fileError.message, details: fileError.details });
               toast({
                 title: "Ostrzeżenie",
                 description: "Produkt został dodany, ale plik nie został zapisany",
@@ -1459,32 +1482,31 @@ interface WarehouseTileProps {
                     </div>
                     
                     {/* File preview buttons for file products */}
-                    {item.is_custom && item.custom_description?.startsWith('data:') && (
+                    {item.is_custom && item.project_files && item.project_files.length > 0 && (
                       <div className="flex items-center gap-1 ml-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
-                            const fileName = item.custom_name || 'Nieznany plik';
-                            const fileUrl = item.custom_description || '';
+                            const file = item.project_files?.[0]; // Get first file
+                            if (!file) return;
+                            
+                            const fileType = file.file_type || 'unknown';
+                            const fileName = file.file_name || 'Nieznany plik';
+                            const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
                             
                             // Convert base64 to File object
                             let fileData: File | null = null;
-                            if (fileUrl.startsWith('data:')) {
-                              try {
-                                const base64Data = fileUrl.split(',')[1];
-                                const mimeType = fileUrl.split(';')[0].split(':')[1];
-                                const byteCharacters = atob(base64Data);
-                                const byteNumbers = new Array(byteCharacters.length);
-                                for (let i = 0; i < byteCharacters.length; i++) {
-                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
-                                }
-                                const byteArray = new Uint8Array(byteNumbers);
-                                fileData = new Blob([byteArray], { type: mimeType }) as File;
-                              } catch (error) {
-                                console.error('Error converting base64 to file:', error);
+                            try {
+                              const byteCharacters = atob(file.file_data);
+                              const byteNumbers = new Array(byteCharacters.length);
+                              for (let i = 0; i < byteCharacters.length; i++) {
+                                byteNumbers[i] = byteCharacters.charCodeAt(i);
                               }
+                              const byteArray = new Uint8Array(byteNumbers);
+                              fileData = new Blob([byteArray], { type: file.mime_type }) as File;
+                            } catch (error) {
+                              console.error('Error converting base64 to file:', error);
                             }
                             
                             setPreviewFile({
@@ -1505,34 +1527,38 @@ interface WarehouseTileProps {
                           size="sm"
                           onClick={() => {
                             // Handle print
-                            if (item.custom_description?.startsWith('data:')) {
-                              const printWindow = window.open('', '_blank');
-                              if (printWindow) {
-                                const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
-                                if (fileType === 'pdf') {
-                                  printWindow.location.href = item.custom_description;
-                                } else {
-                                  printWindow.document.write(`
-                                    <!DOCTYPE html>
-                                    <html>
-                                    <head>
-                                      <title>Wydruk: ${item.custom_name}</title>
-                                      <style>
-                                        body { margin: 0; padding: 20px; text-align: center; }
-                                        img { max-width: 100%; height: auto; }
-                                        @media print { body { margin: 0; } }
-                                      </style>
-                                    </head>
-                                    <body>
-                                      <h1>${item.custom_name}</h1>
-                                      <img src="${item.custom_description}" alt="${item.custom_name}" />
-                                    </body>
-                                    </html>
-                                  `);
-                                  printWindow.document.close();
-                                }
-                                printWindow.print();
+                            const file = item.project_files?.[0]; // Get first file
+                            if (!file) return;
+                            
+                            const printWindow = window.open('', '_blank');
+                            if (printWindow) {
+                              const fileType = file.file_type;
+                              const fileName = file.file_name;
+                              const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
+                              
+                              if (fileType === 'pdf') {
+                                printWindow.location.href = fileUrl;
+                              } else {
+                                printWindow.document.write(`
+                                  <!DOCTYPE html>
+                                  <html>
+                                  <head>
+                                    <title>Wydruk: ${fileName}</title>
+                                    <style>
+                                      body { margin: 0; padding: 20px; text-align: center; }
+                                      img { max-width: 100%; height: auto; }
+                                      @media print { body { margin: 0; } }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <h1>${fileName}</h1>
+                                    <img src="${fileUrl}" alt="${fileName}" />
+                                  </body>
+                                  </html>
+                                `);
+                                printWindow.document.close();
                               }
+                              printWindow.print();
                             }
                           }}
                           className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
@@ -2388,17 +2414,19 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
   };
 
   const fetchProjectEquipment = async () => {
+    // First try with project_files
     const { data, error } = await supabase
       .from('project_equipment')
       .select(`
         *,
-        equipment:equipment(*)
+        equipment:equipment(*),
+        project_files:project_files(*)
       `)
       .eq('project_id', projectId)
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Error fetching project equipment:', error);
+      console.error('Error fetching project equipment with project_files:', error);
       console.error('Error details:', { code: error.code, message: error.message, details: error.details });
       
       // If it's an auth error, try to refresh session
@@ -2416,6 +2444,32 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
         }
         // Try again with refreshed session
         return await fetchProjectEquipment();
+      }
+      
+      // If project_files table doesn't exist or has permission issues, try without it
+      if (error.code === 'PGRST116' || error.message?.includes('project_files')) {
+        console.log('ProjectChecklist: project_files table not accessible, trying without it');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('project_equipment')
+          .select(`
+            *,
+            equipment:equipment(*)
+          `)
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: true });
+
+        if (fallbackError) {
+          console.error('Error fetching project equipment without project_files:', fallbackError);
+          toast({
+            title: "Błąd",
+            description: "Nie udało się pobrać sprzętu projektu",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setProjectEquipment(fallbackData || []);
+        return;
       }
       
       toast({

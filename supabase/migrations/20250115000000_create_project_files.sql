@@ -22,24 +22,18 @@ FOR ALL
 USING (is_admin(auth.uid()))
 WITH CHECK (is_admin(auth.uid()));
 
-CREATE POLICY "Department users can manage their project files" 
+CREATE POLICY "Project members can manage project files" 
 ON public.project_files 
 FOR ALL 
 USING (
-    EXISTS (
-        SELECT 1 FROM public.project_equipment pe 
-        JOIN public.departments d ON pe.department_id = d.id 
-        WHERE pe.id = project_equipment_id 
-        AND (has_department_role(auth.uid(), d.id, 'manager') OR has_department_role(auth.uid(), d.id, 'worker'))
-    )
+    EXISTS (SELECT 1 FROM public.projects WHERE id = project_id AND created_by = auth.uid()) OR
+    EXISTS (SELECT 1 FROM public.project_departments pd JOIN public.departments d ON pd.department_id = d.id WHERE pd.project_id = project_id AND has_department_role(auth.uid(), d.id, 'manager')) OR
+    EXISTS (SELECT 1 FROM public.project_departments pd JOIN public.departments d ON pd.department_id = d.id WHERE pd.project_id = project_id AND has_department_role(auth.uid(), d.id, 'worker'))
 )
 WITH CHECK (
-    EXISTS (
-        SELECT 1 FROM public.project_equipment pe 
-        JOIN public.departments d ON pe.department_id = d.id 
-        WHERE pe.id = project_equipment_id 
-        AND (has_department_role(auth.uid(), d.id, 'manager') OR has_department_role(auth.uid(), d.id, 'worker'))
-    )
+    EXISTS (SELECT 1 FROM public.projects WHERE id = project_id AND created_by = auth.uid()) OR
+    EXISTS (SELECT 1 FROM public.project_departments pd JOIN public.departments d ON pd.department_id = d.id WHERE pd.project_id = project_id AND has_department_role(auth.uid(), d.id, 'manager')) OR
+    EXISTS (SELECT 1 FROM public.project_departments pd JOIN public.departments d ON pd.department_id = d.id WHERE pd.project_id = project_id AND has_department_role(auth.uid(), d.id, 'worker'))
 );
 
 CREATE POLICY "Anyone can view project files" 
