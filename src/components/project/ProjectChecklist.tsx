@@ -166,11 +166,115 @@ const DraggableEquipmentItem = ({
               <Trash2 className="h-2.5 w-2.5" />
             </Button>
           )}
+          {/* File preview buttons for file products */}
+          {item.is_custom && item.custom_description?.startsWith('data:') && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
+                  const fileName = item.custom_name || 'Nieznany plik';
+                  const fileUrl = item.custom_description || '';
+                  
+                  // Convert base64 to File object
+                  let fileData: File | null = null;
+                  if (fileUrl.startsWith('data:')) {
+                    try {
+                      const base64Data = fileUrl.split(',')[1];
+                      const mimeType = fileUrl.split(';')[0].split(':')[1];
+                      const byteCharacters = atob(base64Data);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      fileData = new File([byteArray], fileName, { type: mimeType });
+                    } catch (error) {
+                      console.error('Error converting base64 to file:', error);
+                    }
+                  }
+                  
+                  // This would need to be passed down from parent component
+                  // For now, we'll just open in new window
+                  const newWindow = window.open('', '_blank');
+                  if (newWindow) {
+                    if (fileType === 'pdf') {
+                      newWindow.location.href = fileUrl;
+                    } else {
+                      newWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <title>Podgląd: ${fileName}</title>
+                          <style>
+                            body { margin: 0; padding: 20px; text-align: center; }
+                            img { max-width: 100%; height: auto; }
+                          </style>
+                        </head>
+                        <body>
+                          <h1>${fileName}</h1>
+                          <img src="${fileUrl}" alt="${fileName}" />
+                        </body>
+                        </html>
+                      `);
+                      newWindow.document.close();
+                    }
+                  }
+                }}
+                className="h-7 w-7 p-0 bg-background/30 hover:bg-background/50 border border-background/50 rounded-md"
+                title="Podgląd pliku"
+              >
+                <Eye className="h-2.5 w-2.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (item.custom_description?.startsWith('data:')) {
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                      const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
+                      if (fileType === 'pdf') {
+                        printWindow.location.href = item.custom_description;
+                      } else {
+                        printWindow.document.write(`
+                          <!DOCTYPE html>
+                          <html>
+                          <head>
+                            <title>Wydruk: ${item.custom_name}</title>
+                            <style>
+                              body { margin: 0; padding: 20px; text-align: center; }
+                              img { max-width: 100%; height: auto; }
+                              @media print { body { margin: 0; } }
+                            </style>
+                          </head>
+                          <body>
+                            <h1>${item.custom_name}</h1>
+                            <img src="${item.custom_description}" alt="${item.custom_name}" />
+                          </body>
+                          </html>
+                        `);
+                        printWindow.document.close();
+                      }
+                      printWindow.print();
+                    }
+                  }
+                }}
+                className="h-7 w-7 p-0 bg-background/30 hover:bg-background/50 border border-background/50 rounded-md"
+                title="Wydrukuj plik"
+              >
+                <Printer className="h-2.5 w-2.5" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
       
-      {/* Render custom description as simple text */}
-      {hasDescription && isExpanded && (
+      {/* Render custom description as simple text (but not for file data) */}
+      {hasDescription && isExpanded && !item.custom_description?.startsWith('data:') && (
         <div className="mt-1 text-[13px] text-foreground/80" style={{ marginLeft: `${(level + 1) * 12}px` }}>
           • {item.custom_description}
         </div>
@@ -273,6 +377,15 @@ const DepartmentTile = ({
       }
 
       if (equipmentMode === 'pdf') {
+        if (!selectedFile) {
+          toast({
+            title: "Błąd",
+            description: "Wybierz plik do przesłania",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         if (!selectedEquipment.trim()) {
           toast({
             title: "Błąd",
@@ -283,7 +396,7 @@ const DepartmentTile = ({
         }
         
         // Get file extension to determine file type
-        const fileExtension = selectedEquipment.split('.').pop()?.toLowerCase();
+        const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
         const getFileTypeDescription = (ext: string) => {
           switch (ext) {
             case 'pdf': return 'Dokument PDF';
@@ -306,7 +419,7 @@ const DepartmentTile = ({
         const equipmentData = {
           project_id: projectId,
           department_id: department.id,
-          custom_name: selectedEquipment.trim(),
+          custom_name: selectedFile.name,
           custom_description: selectedEquipmentDescription.trim() || fileTypeDescription,
           quantity: 1,
           is_custom: true,
@@ -389,6 +502,7 @@ const DepartmentTile = ({
 
         onEquipmentAdded();
         setIsEquipmentDialogOpen(false);
+        setSelectedFile(null);
         return;
       }
 
@@ -532,6 +646,7 @@ const DepartmentTile = ({
       setSelectedEquipmentDescription('');
       setCustomEquipmentName('');
       setCustomEquipmentDescription('');
+      setSelectedFile(null);
       setEquipmentMode('existing');
       setIsEquipmentDialogOpen(false);
       onEquipmentAdded();
@@ -885,6 +1000,7 @@ const DepartmentTile = ({
 
                           onEquipmentAdded();
                           setIsEquipmentDialogOpen(false);
+                          setSelectedFile(null);
                         } catch (error: any) {
                           console.error('Error adding equipment from file:', error);
                           toast({
@@ -894,7 +1010,10 @@ const DepartmentTile = ({
                           });
                         }
                       }}
-                      onClose={() => setIsEquipmentDialogOpen(false)}
+                      onClose={() => {
+                        setIsEquipmentDialogOpen(false);
+                        setSelectedFile(null);
+                      }}
                     />
                   </TabsContent>
 
@@ -947,7 +1066,10 @@ const DepartmentTile = ({
                 </Tabs>
 
                 <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setIsEquipmentDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setIsEquipmentDialogOpen(false);
+                    setSelectedFile(null);
+                  }}>
                     Anuluj
                   </Button>
                   <Button onClick={addEquipment}>
