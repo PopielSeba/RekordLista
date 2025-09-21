@@ -111,8 +111,13 @@ export const useProjects = () => {
 
       if (error) throw error;
       
-      // Add color back to the data if it was provided
-      const dataWithColor = color ? { ...data, color } : { ...data, color: '#3b82f6' };
+      // Find the existing project to preserve its color
+      const existingProject = projects.find(p => p.id === id);
+      const existingColor = existingProject?.color || '#3b82f6';
+      
+      // Use the new color if provided, otherwise keep the existing color
+      const finalColor = color || existingColor;
+      const dataWithColor = { ...data, color: finalColor };
 
       setProjects(prev => prev.map(p => p.id === id ? { ...dataWithColor, status: data.status as 'active' | 'completed' | 'pending' } : p));
       toast({
@@ -143,7 +148,9 @@ export const useProjects = () => {
       if (fetchError) throw fetchError;
 
       // Create new project with reverse flow
-      const sourceColor = sourceProject.color || '#3b82f6';
+      // Get the source color from the local projects state (which has the color)
+      const localSourceProject = projects.find(p => p.id === sourceProjectId);
+      const sourceColor = localSourceProject?.color || sourceProject.color || '#3b82f6';
       const lighterColor = lightenColor(sourceColor, 0.4); // Make it 40% lighter
       
       // Remove color field as it might not exist in the database yet
