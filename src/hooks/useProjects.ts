@@ -47,11 +47,23 @@ export const useProjects = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setProjects(data?.map(project => ({
-        ...project,
-        status: project.status as 'active' | 'completed' | 'pending',
-        color: project.color || '#3b82f6' // Add default color if not present
-      })) || []);
+      
+      // Preserve existing colors from local state when fetching from database
+      setProjects(prevProjects => {
+        const newProjects = data?.map(project => {
+          // Find existing project in local state to preserve its color
+          const existingProject = prevProjects.find(p => p.id === project.id);
+          const existingColor = existingProject?.color;
+          
+          return {
+            ...project,
+            status: project.status as 'active' | 'completed' | 'pending',
+            color: existingColor || project.color || '#3b82f6' // Use existing color, then DB color, then default
+          };
+        }) || [];
+        
+        return newProjects;
+      });
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast({
@@ -127,9 +139,10 @@ export const useProjects = () => {
       return { success: true, data: dataWithColor };
     } catch (error) {
       console.error('Error updating project:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       toast({
         title: "Błąd",
-        description: "Nie udało się zaktualizować projektu",
+        description: `Nie udało się zaktualizować projektu: ${error instanceof Error ? error.message : 'Nieznany błąd'}`,
         variant: "destructive"
       });
       return { success: false, error };
