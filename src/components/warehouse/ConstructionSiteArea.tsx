@@ -259,6 +259,7 @@ export const ConstructionSiteArea = ({ onEquipmentMoved, equipment, allProjectEq
       const canDropResult = item.projectEquipment && (item.projectEquipment.status === 'loading' || item.projectEquipment.status === 'delivered');
       console.log('ConstructionSiteArea canDrop:', { item, canDropResult, canManage });
       // Accept equipment that's loading (from coordination) or delivered (from warehouses) in reverse flow
+      // Also accept equipment from intermediate warehouses
       return canDropResult;
     },
     collect: (monitor) => ({

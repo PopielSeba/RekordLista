@@ -1,5 +1,5 @@
 import { useDrag } from 'react-dnd';
-import { ChevronRight, ChevronDown, Package, Circle } from 'lucide-react';
+import { ChevronRight, ChevronDown, Package, Circle, Eye, Printer, FileText, Image, File } from 'lucide-react';
 import { Equipment } from '@/types';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -67,6 +67,35 @@ export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStat
     return equipment.name || 'Nieznany sprzęt';
   };
 
+  const isFileProduct = () => {
+    return equipment.is_custom && (
+      equipment.custom_description?.includes('Dokument PDF') ||
+      equipment.custom_description?.includes('Obraz') ||
+      equipment.custom_description?.includes('Dokument Word') ||
+      equipment.custom_description?.includes('Plik tekstowy') ||
+      equipment.custom_description?.includes('Plik')
+    );
+  };
+
+  const getFileIcon = () => {
+    if (!isFileProduct()) return <Package className="h-4 w-4 shrink-0" />;
+    
+    const description = equipment.custom_description || '';
+    if (description.includes('PDF')) return <FileText className="h-4 w-4 shrink-0" />;
+    if (description.includes('Obraz')) return <Image className="h-4 w-4 shrink-0" />;
+    return <File className="h-4 w-4 shrink-0" />;
+  };
+
+  const handleViewFile = () => {
+    // For now, we'll show an alert. In a real implementation, you'd open the file
+    alert('Funkcja podglądu pliku będzie dostępna wkrótce');
+  };
+
+  const handlePrintFile = () => {
+    // For now, we'll show an alert. In a real implementation, you'd print the file
+    alert('Funkcja wydruku pliku będzie dostępna wkrótce');
+  };
+
   return (
     <div className="w-full">
       <div
@@ -100,24 +129,49 @@ export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStat
             </div>
           )}
           
-          <Package className="h-4 w-4 shrink-0" />
+          {getFileIcon()}
           
           <div className="flex-1 min-w-0">
             <div className="font-medium text-sm truncate">{getEquipmentDisplayName()}</div>
             <div className="text-xs opacity-70 font-medium">{getStatusLabel(equipment.status)}</div>
           </div>
 
-          {canChangeStatus && (equipment.status === 'pending' || equipment.status === 'ready') && (
-            <Button
-              onClick={handleStatusChange}
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 hover:bg-background/20"
-              title={equipment.status === 'pending' ? 'Oznacz jako gotowy' : 'Oznacz jako w przygotowaniu'}
-            >
-              <Circle className="h-4 w-4" />
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {isFileProduct() && (
+              <>
+                <Button
+                  onClick={handleViewFile}
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 hover:bg-background/20"
+                  title="Podgląd pliku"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={handlePrintFile}
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 hover:bg-background/20"
+                  title="Wydrukuj plik"
+                >
+                  <Printer className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+
+            {canChangeStatus && (equipment.status === 'pending' || equipment.status === 'ready') && (
+              <Button
+                onClick={handleStatusChange}
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 p-0 hover:bg-background/20"
+                title={equipment.status === 'pending' ? 'Oznacz jako gotowy' : 'Oznacz jako w przygotowaniu'}
+              >
+                <Circle className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

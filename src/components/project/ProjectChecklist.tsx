@@ -215,7 +215,7 @@ const DepartmentTile = ({
   const [selectedEquipmentDescription, setSelectedEquipmentDescription] = useState('');
   const [customEquipmentName, setCustomEquipmentName] = useState('');
   const [customEquipmentDescription, setCustomEquipmentDescription] = useState('');
-  const [equipmentMode, setEquipmentMode] = useState<'existing' | 'custom' | 'file'>('existing');
+  const [equipmentMode, setEquipmentMode] = useState<'existing' | 'custom' | 'file' | 'pdf'>('existing');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const [{ isOverDept }, dropDept] = useDrop({
@@ -267,6 +267,89 @@ const DepartmentTile = ({
           title: "Informacja",
           description: "Użyj opcji 'Z pliku' aby zaimportować sprzęt z pliku",
         });
+        return;
+      }
+
+      if (equipmentMode === 'pdf') {
+        if (!selectedEquipment.trim()) {
+          toast({
+            title: "Błąd",
+            description: "Podaj nazwę produktu",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // Get file extension to determine file type
+        const fileExtension = selectedEquipment.split('.').pop()?.toLowerCase();
+        const getFileTypeDescription = (ext: string) => {
+          switch (ext) {
+            case 'pdf': return 'Dokument PDF';
+            case 'jpg':
+            case 'jpeg': return 'Obraz JPG';
+            case 'png': return 'Obraz PNG';
+            case 'bmp': return 'Obraz BMP';
+            case 'gif': return 'Obraz GIF';
+            case 'tiff': return 'Obraz TIFF';
+            case 'doc': return 'Dokument Word';
+            case 'docx': return 'Dokument Word';
+            case 'txt': return 'Plik tekstowy';
+            default: return 'Plik';
+          }
+        };
+
+        const fileTypeDescription = getFileTypeDescription(fileExtension || '');
+        
+        // Add file as custom equipment
+        const equipmentData = {
+          project_id: projectId,
+          department_id: department.id,
+          custom_name: selectedEquipment.trim(),
+          custom_description: selectedEquipmentDescription.trim() || fileTypeDescription,
+          quantity: 1,
+          is_custom: true,
+          status: 'pending'
+        };
+
+        const { data: mainEquipmentResult, error: mainError } = await supabase
+          .from('project_equipment')
+          .insert(equipmentData)
+          .select()
+          .single();
+
+        if (mainError) {
+          toast({
+            title: "Błąd",
+            description: "Nie udało się dodać produktu",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Log equipment addition
+        await supabase.rpc('log_equipment_action', {
+          _project_id: projectId,
+          _action_type: 'added',
+          _equipment_id: null,
+          _project_equipment_id: mainEquipmentResult.id,
+          _new_value: selectedEquipment.trim(),
+          _details: {
+            department: department.name,
+            department_id: department.id,
+            status: 'pending',
+            description: selectedEquipmentDescription.trim() || fileTypeDescription,
+            type: 'file',
+            file_type: fileExtension
+          }
+        });
+
+        toast({
+          title: "Sukces",
+          description: "Produkt został dodany",
+        });
+
+        onEquipmentAdded();
+        setIsEquipmentDialogOpen(false);
         return;
       }
 
@@ -658,11 +741,12 @@ const DepartmentTile = ({
                   <DialogTitle>Dodaj sprzęt do działu {department.name}</DialogTitle>
                 </DialogHeader>
                 
-                <Tabs value={equipmentMode} onValueChange={(value) => setEquipmentMode(value as 'existing' | 'custom' | 'file')}>
-                  <TabsList className="grid w-full grid-cols-3">
+                <Tabs value={equipmentMode} onValueChange={(value) => setEquipmentMode(value as 'existing' | 'custom' | 'file' | 'pdf')}>
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="existing">Z listy</TabsTrigger>
                     <TabsTrigger value="custom">Nowy</TabsTrigger>
                     <TabsTrigger value="file">Z pliku</TabsTrigger>
+                    <TabsTrigger value="pdf">Plik</TabsTrigger>
                   </TabsList>
                   
                    <TabsContent value="existing" className="space-y-4">
@@ -773,6 +857,52 @@ const DepartmentTile = ({
                       }}
                       onClose={() => setIsEquipmentDialogOpen(false)}
                     />
+                  </TabsContent>
+
+                  <TabsContent value="pdf" className="space-y-4">
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="file-upload">Wybierz plik:</Label>
+                        <input
+                          id="file-upload"
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png,.bmp,.gif,.tiff,.doc,.docx,.txt"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setSelectedEquipment(file.name);
+                            }
+                          }}
+                          className="w-full p-2 border border-gray-300 rounded-md"
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Obsługiwane formaty: PDF, JPG, JPEG, PNG, BMP, GIF, TIFF, DOC, DOCX, TXT
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="file-name">Nazwa produktu:</Label>
+                        <Input
+                          id="file-name"
+                          value={selectedEquipment}
+                          onChange={(e) => setSelectedEquipment(e.target.value)}
+                          placeholder="Wprowadź nazwę produktu..."
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="file-description">Opis (opcjonalny):</Label>
+                        <Input
+                          id="file-description"
+                          value={selectedEquipmentDescription}
+                          onChange={(e) => setSelectedEquipmentDescription(e.target.value)}
+                          placeholder="Wprowadź opis dokumentu..."
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Opis będzie widoczny na wydruku
+                        </p>
+                      </div>
+                    </div>
                   </TabsContent>
                 </Tabs>
 
@@ -1025,18 +1155,45 @@ interface WarehouseTileProps {
     accept: ITEM_TYPES.PROJECT_EQUIPMENT,
     drop: (item: any) => {
       if (item.projectEquipment && warehouse) {
-        // Sprzęt zostaje w magazynie bez zmiany statusu - zapisujemy lokalizację magazynu
-        onEquipmentMoved(item.projectEquipment.id, item.projectEquipment.status, warehouse.id);
+        // Check if moving from one warehouse to another
+        const isFromWarehouse = item.projectEquipment.intermediate_warehouse_id;
+        const isToWarehouse = warehouse.id;
+        
+        if (isFromWarehouse && isToWarehouse && isFromWarehouse !== isToWarehouse) {
+          // Direct warehouse-to-warehouse movement - keep current status, just change warehouse
+          onEquipmentMoved(item.projectEquipment.id, item.projectEquipment.status, warehouse.id);
+        } else {
+          // Original logic for equipment coming from departments/coordination
+          onEquipmentMoved(item.projectEquipment.id, item.projectEquipment.status, warehouse.id);
+        }
       }
     },
     canDrop: (item: any) => {
-      // Pre-coordination warehouses accept ready equipment, in reverse flow also delivered
+      if (!item.projectEquipment) return false;
+      
+      // Allow direct movement between warehouses (same type or different types)
+      const isFromWarehouse = item.projectEquipment.intermediate_warehouse_id;
+      const isToWarehouse = warehouse?.id;
+      
+      // If moving from one warehouse to another, allow it
+      if (isFromWarehouse && isToWarehouse && isFromWarehouse !== isToWarehouse) {
+        if (type === 'pre_coordination') {
+          // Pre-coordination warehouses can accept equipment from any warehouse
+          return item.projectEquipment.status === 'ready' || item.projectEquipment.status === 'delivered';
+        }
+        if (type === 'post_coordination') {
+          // Post-coordination warehouses can accept equipment from any warehouse
+          return item.projectEquipment.status === 'loading' || item.projectEquipment.status === 'delivered';
+        }
+      }
+      
+      // Original logic for equipment coming from departments/coordination/construction site
       if (type === 'pre_coordination') {
-        return item.projectEquipment && (item.projectEquipment.status === 'ready' || item.projectEquipment.status === 'delivered');
+        return item.projectEquipment.status === 'ready' || item.projectEquipment.status === 'delivered';
       }
       // Post-coordination warehouses accept loading and delivered equipment  
       if (type === 'post_coordination') {
-        return item.projectEquipment && (item.projectEquipment.status === 'loading' || item.projectEquipment.status === 'delivered');
+        return item.projectEquipment.status === 'loading' || item.projectEquipment.status === 'delivered';
       }
       return false;
     },
@@ -1108,8 +1265,8 @@ interface WarehouseTileProps {
           </div>
           <div className="text-center text-xs text-muted-foreground">
             {type === 'pre_coordination' 
-              ? (reverseFlow ? 'Przyjmuje: ZIELONY i FIOLETOWY sprzęt' : 'Przyjmuje: ZIELONY sprzęt')
-              : 'Przyjmuje: NIEBIESKI sprzęt'
+              ? (reverseFlow ? 'Przyjmuje: ZIELONY i FIOLETOWY sprzęt (można przeciągać między magazynami)' : 'Przyjmuje: ZIELONY sprzęt (można przeciągać między magazynami)')
+              : 'Przyjmuje: NIEBIESKI sprzęt (można przeciągać między magazynami)'
             }
           </div>
         </CardHeader>

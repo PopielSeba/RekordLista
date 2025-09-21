@@ -267,34 +267,34 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="bg-gray-800 border-gray-600">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
+          <CardTitle className="flex items-center gap-2 text-gray-100">
+            <Upload className="h-5 w-5 text-gray-300" />
             Dodaj sprzęt z pliku
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="file-upload">Wybierz plik</Label>
+            <Label htmlFor="file-upload" className="text-gray-300">Wybierz plik</Label>
             <input
               ref={fileInputRef}
               id="file-upload"
               type="file"
               accept=".xlsx,.xls"
               onChange={handleFileSelect}
-              className="w-full p-2 border border-gray-300 rounded-md"
+              className="w-full p-2 border border-gray-500 rounded-md bg-gray-700 text-gray-100 file:bg-gray-600 file:text-gray-100 file:border-gray-500"
               disabled={isProcessing}
             />
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-400">
               Obsługiwane formaty: Excel (.xlsx, .xls)
             </p>
           </div>
 
           {selectedFile && (
-            <div className="p-3 bg-gray-50 rounded-md">
-              <p className="text-sm font-medium">Wybrany plik: {selectedFile.name}</p>
-              <p className="text-xs text-gray-500">
+            <div className="p-3 bg-gray-700 rounded-md border border-gray-600">
+              <p className="text-sm font-medium text-gray-100">Wybrany plik: {selectedFile.name}</p>
+              <p className="text-xs text-gray-400">
                 Rozmiar: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
               </p>
             </div>
@@ -302,7 +302,7 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
 
           {isProcessing && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-sm text-gray-300">
                 <span>{processingStep}</span>
                 <span>{progress}%</span>
               </div>
@@ -336,18 +336,18 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
       </Card>
 
       {parsedEquipment.length > 0 && (
-        <Card>
+        <Card className="bg-gray-800 border-gray-600">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                Znalezione produkty ({parsedEquipment.length})
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <span className="text-gray-100">Znalezione produkty ({parsedEquipment.length})</span>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={selectAll}>
+                <Button variant="outline" size="sm" onClick={selectAll} className="bg-gray-700 text-gray-200 border-gray-500 hover:bg-gray-600">
                   Zaznacz wszystkie
                 </Button>
-                <Button variant="outline" size="sm" onClick={selectNone}>
+                <Button variant="outline" size="sm" onClick={selectNone} className="bg-gray-700 text-gray-200 border-gray-500 hover:bg-gray-600">
                   Odznacz wszystkie
                 </Button>
               </div>
@@ -359,35 +359,37 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
                 <div
                   key={index}
                   className={`flex items-center gap-3 p-3 border rounded-md ${
-                    item.selected ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
+                    item.selected ? 'bg-blue-900 border-blue-600' : 'bg-gray-800 border-gray-600'
                   }`}
                 >
                   <input
                     type="checkbox"
                     checked={item.selected}
                     onChange={() => toggleEquipmentSelection(index)}
-                    className="h-4 w-4 text-blue-600 rounded"
+                    className="h-4 w-4 text-blue-400 rounded bg-gray-700 border-gray-500"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      {getSourceIcon(item.source)}
-                      <span className="font-medium text-gray-900">{item.name}</span>
-                      <Badge variant="outline" className="text-xs">
+                      <div className="text-gray-300">
+                        {getSourceIcon(item.source)}
+                      </div>
+                      <span className="font-medium text-gray-100">{item.name}</span>
+                      <Badge variant="outline" className="text-xs bg-gray-700 text-gray-300 border-gray-500">
                         {getSourceLabel(item.source)}
                       </Badge>
                     </div>
-                    <div className="flex gap-4 text-sm text-gray-600">
+                    <div className="flex gap-4 text-sm text-gray-400">
                       {item.code && (
-                        <span>Kod: <strong className="text-gray-800">{item.code}</strong></span>
+                        <span>Kod: <strong className="text-gray-200">{item.code}</strong></span>
                       )}
                       {item.quantity && item.quantity > 1 && (
-                        <span>Ilość: <strong className="text-gray-800">{item.quantity}</strong></span>
+                        <span>Ilość: <strong className="text-gray-200">{item.quantity}</strong></span>
                       )}
                     </div>
                   </div>
                   <Badge
                     variant={item.confidence > 0.8 ? "default" : "secondary"}
-                    className="text-xs"
+                    className="text-xs bg-gray-700 text-gray-300"
                   >
                     {Math.round(item.confidence * 100)}%
                   </Badge>
@@ -398,13 +400,13 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
             <div className="mt-4 flex gap-2">
               <Button 
                 onClick={handleConfirm} 
-                className="flex-1"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                 disabled={parsedEquipment.filter(eq => eq.selected).length === 0}
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Dodaj wybrane produkty ({parsedEquipment.filter(eq => eq.selected).length})
               </Button>
-              <Button variant="outline" onClick={() => setParsedEquipment([])}>
+              <Button variant="outline" onClick={() => setParsedEquipment([])} className="bg-gray-700 text-gray-200 border-gray-500 hover:bg-gray-600">
                 <XCircle className="h-4 w-4 mr-2" />
                 Wyczyść
               </Button>
