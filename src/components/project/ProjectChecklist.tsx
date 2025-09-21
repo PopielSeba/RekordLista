@@ -1349,11 +1349,32 @@ interface WarehouseTileProps {
                           size="sm"
                           onClick={() => {
                             const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
+                            const fileName = item.custom_name || 'Nieznany plik';
+                            const fileUrl = item.custom_description || '';
+                            
+                            // Convert base64 to File object
+                            let fileData: File | null = null;
+                            if (fileUrl.startsWith('data:')) {
+                              try {
+                                const base64Data = fileUrl.split(',')[1];
+                                const mimeType = fileUrl.split(';')[0].split(':')[1];
+                                const byteCharacters = atob(base64Data);
+                                const byteNumbers = new Array(byteCharacters.length);
+                                for (let i = 0; i < byteCharacters.length; i++) {
+                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                }
+                                const byteArray = new Uint8Array(byteNumbers);
+                                fileData = new File([byteArray], fileName, { type: mimeType });
+                              } catch (error) {
+                                console.error('Error converting base64 to file:', error);
+                              }
+                            }
+                            
                             setPreviewFile({
-                              fileName: item.custom_name || 'Nieznany plik',
+                              fileName: fileName,
                               fileType: fileType,
-                              fileUrl: item.custom_description || '',
-                              fileData: null
+                              fileUrl: fileUrl,
+                              fileData: fileData
                             });
                             setIsPreviewOpen(true);
                           }}

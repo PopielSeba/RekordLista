@@ -13,7 +13,7 @@ interface FilePreviewModalProps {
   fileName: string;
   fileType: string;
   fileUrl?: string;
-  fileData?: File;
+  fileData?: File | null;
 }
 
 export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
@@ -41,11 +41,22 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   };
 
   // Load PDF document
-  const loadPdf = async (url: string) => {
+  const loadPdf = async (url: string, fileData?: File | null) => {
     try {
       setLoading(true);
       setError('');
-      const pdf = await pdfjsLib.getDocument(url).promise;
+      
+      let pdfSource;
+      if (fileData) {
+        // Use File object for PDF.js
+        const arrayBuffer = await fileData.arrayBuffer();
+        pdfSource = { data: arrayBuffer };
+      } else {
+        // Use URL
+        pdfSource = url;
+      }
+      
+      const pdf = await pdfjsLib.getDocument(pdfSource).promise;
       setPdfDocument(pdf);
       setTotalPages(pdf.numPages);
       setCurrentPage(1);
@@ -100,7 +111,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     if (!url) return;
 
     if (fileType === 'pdf') {
-      loadPdf(url);
+      loadPdf(url, fileData);
     } else if (['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff'].includes(fileType.toLowerCase())) {
       loadImage(url);
     }
