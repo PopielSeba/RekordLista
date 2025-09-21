@@ -359,7 +359,7 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
                 <div
                   key={index}
                   className={`flex items-center gap-3 p-3 border rounded-md ${
-                    item.selected ? 'bg-blue-50 border-blue-200' : 'bg-white'
+                    item.selected ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
                   }`}
                 >
                   <input
@@ -371,17 +371,17 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       {getSourceIcon(item.source)}
-                      <span className="font-medium">{item.name}</span>
+                      <span className="font-medium text-gray-900">{item.name}</span>
                       <Badge variant="outline" className="text-xs">
                         {getSourceLabel(item.source)}
                       </Badge>
                     </div>
                     <div className="flex gap-4 text-sm text-gray-600">
                       {item.code && (
-                        <span>Kod: <strong>{item.code}</strong></span>
+                        <span>Kod: <strong className="text-gray-800">{item.code}</strong></span>
                       )}
                       {item.quantity && item.quantity > 1 && (
-                        <span>Ilość: <strong>{item.quantity}</strong></span>
+                        <span>Ilość: <strong className="text-gray-800">{item.quantity}</strong></span>
                       )}
                     </div>
                   </div>
