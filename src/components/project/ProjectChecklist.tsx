@@ -208,7 +208,23 @@ const DraggableEquipmentItem = ({
                   const newWindow = window.open('', '_blank');
                   if (newWindow) {
                     if (fileType === 'pdf') {
-                      newWindow.location.href = fileUrl;
+                      // For PDFs, create an iframe instead of direct navigation
+                      newWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <title>Podgląd: ${fileName}</title>
+                          <style>
+                            body { margin: 0; padding: 0; }
+                            iframe { width: 100%; height: 100vh; border: none; }
+                          </style>
+                        </head>
+                        <body>
+                          <iframe src="${fileUrl}" type="application/pdf"></iframe>
+                        </body>
+                        </html>
+                      `);
+                      newWindow.document.close();
                     } else {
                       newWindow.document.write(`
                         <!DOCTYPE html>
@@ -269,7 +285,23 @@ const DraggableEquipmentItem = ({
                   const printWindow = window.open('', '_blank');
                   if (printWindow) {
                     if (fileType === 'pdf') {
-                      printWindow.location.href = fileUrl;
+                      // For PDFs, create an iframe instead of direct navigation
+                      printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <title>Wydruk: ${fileName}</title>
+                          <style>
+                            body { margin: 0; padding: 0; }
+                            iframe { width: 100%; height: 100vh; border: none; }
+                          </style>
+                        </head>
+                        <body>
+                          <iframe src="${fileUrl}" type="application/pdf"></iframe>
+                        </body>
+                        </html>
+                      `);
+                      printWindow.document.close();
                     } else {
                       printWindow.document.write(`
                         <!DOCTYPE html>
@@ -1647,7 +1679,23 @@ interface WarehouseTileProps {
                             const printWindow = window.open('', '_blank');
                             if (printWindow) {
                               if (fileType === 'pdf') {
-                                printWindow.location.href = fileUrl;
+                                // For PDFs, create an iframe instead of direct navigation
+                                printWindow.document.write(`
+                                  <!DOCTYPE html>
+                                  <html>
+                                  <head>
+                                    <title>Wydruk: ${fileName}</title>
+                                    <style>
+                                      body { margin: 0; padding: 0; }
+                                      iframe { width: 100%; height: 100vh; border: none; }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <iframe src="${fileUrl}" type="application/pdf"></iframe>
+                                  </body>
+                                  </html>
+                                `);
+                                printWindow.document.close();
                               } else {
                                 printWindow.document.write(`
                                   <!DOCTYPE html>
