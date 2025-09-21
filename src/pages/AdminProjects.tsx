@@ -24,6 +24,9 @@ export const AdminProjects = () => {
   const { projects, loading, createProject, updateProject, copyProjectForReturn, deleteProject } = useProjects();
   const { user } = useAuth();
   const { canDeleteProjects, isAdmin } = useUserPermissions();
+  
+  // Debug: log permissions
+  console.log('AdminProjects - canDeleteProjects:', canDeleteProjects, 'isAdmin:', isAdmin);
   const [editingProject, setEditingProject] = useState<DatabaseProject | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
