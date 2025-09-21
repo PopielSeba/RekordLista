@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Package, Building2, Truck, MapPin, Trash2, Settings, Circle, ChevronRight, Printer, Search as SearchIcon } from 'lucide-react';
+import { Plus, Package, Building2, Truck, MapPin, Trash2, Settings, Circle, ChevronRight, Printer, Search as SearchIcon, Eye, FileText, Image, File } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +17,7 @@ import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { ConstructionSiteArea } from '../warehouse/ConstructionSiteArea';
 import { EquipmentItem } from '../equipment/EquipmentItem';
 import { FileUploadParser } from '../equipment/FileUploadParser';
+import { FilePreviewModal } from '@/components/ui/file-preview-modal';
 import { Equipment, ProjectEquipment } from '@/types';
 
 interface Department {
@@ -1068,6 +1069,8 @@ interface WarehouseTileProps {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [warehouseName, setWarehouseName] = useState('');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{fileName: string, fileType: string, fileUrl: string, fileData: File | null} | null>(null);
 
   const printWarehouseChecklist = () => {
     if (!warehouse) return;
@@ -1293,46 +1296,114 @@ interface WarehouseTileProps {
             {equipment.length > 0 ? (
               equipment.map((item) => (
                 <div key={item.id} className="space-y-1">
-                  <DraggableEquipmentItem
-                    item={item}
-                    getEquipmentDisplayName={(eq) => (eq.is_custom ? eq.custom_name : eq.equipment?.name) || 'Nieznany sprzęt'}
-                    getStatusLabel={(status) => {
-                      switch (status) {
-                        case 'ready': return 'Gotowy (magazyn)';
-                        case 'loading': return 'Po koordynacji (magazyn)';
-                        case 'delivered': return 'Dostarczony (magazyn)';
-                        case 'pending': return 'W przygotowaniu (magazyn)';
-                        default: return 'W magazynie';
-                      }
-                    }}
-                    getStatusColor={(status) => {
-                      switch (status) {
-                        case 'ready':
-                          return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white border-emerald-600 shadow-emerald-200/50 shadow';
-                        case 'loading':
-                          return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-blue-200/50 shadow';
-                        case 'delivered':
-                          return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-purple-600 shadow-purple-200/50 shadow';
-                        case 'pending':
-                          return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-yellow-600 shadow-yellow-200/50 shadow';
-                        default:
-                          return 'bg-muted text-foreground';
-                      }
-                    }}
-                    updateEquipmentStatus={() => {}}
-                    removeEquipment={removeEquipment || (() => {})}
-                    canDeleteEquipment={canDeleteEquipment}
-                    allProjectEquipment={allProjectEquipment}
-                    expandedItems={expandedItems}
-                    onToggleExpand={(id) => {
-                      setExpandedItems(prev => {
-                        const next = new Set(prev);
-                        if (next.has(id)) next.delete(id); else next.add(id);
-                        return next;
-                      });
-                    }}
-                    childRenderMode="none"
-                  />
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <DraggableEquipmentItem
+                        item={item}
+                        getEquipmentDisplayName={(eq) => (eq.is_custom ? eq.custom_name : eq.equipment?.name) || 'Nieznany sprzęt'}
+                        getStatusLabel={(status) => {
+                          switch (status) {
+                            case 'ready': return 'Gotowy (magazyn)';
+                            case 'loading': return 'Po koordynacji (magazyn)';
+                            case 'delivered': return 'Dostarczony (magazyn)';
+                            case 'pending': return 'W przygotowaniu (magazyn)';
+                            default: return 'W magazynie';
+                          }
+                        }}
+                        getStatusColor={(status) => {
+                          switch (status) {
+                            case 'ready':
+                              return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white border-emerald-600 shadow-emerald-200/50 shadow';
+                            case 'loading':
+                              return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-blue-200/50 shadow';
+                            case 'delivered':
+                              return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-purple-600 shadow-purple-200/50 shadow';
+                            case 'pending':
+                              return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-yellow-600 shadow-yellow-200/50 shadow';
+                            default:
+                              return 'bg-muted text-foreground';
+                          }
+                        }}
+                        updateEquipmentStatus={() => {}}
+                        removeEquipment={removeEquipment || (() => {})}
+                        canDeleteEquipment={canDeleteEquipment}
+                        allProjectEquipment={allProjectEquipment}
+                        expandedItems={expandedItems}
+                        onToggleExpand={(id) => {
+                          setExpandedItems(prev => {
+                            const next = new Set(prev);
+                            if (next.has(id)) next.delete(id); else next.add(id);
+                            return next;
+                          });
+                        }}
+                        childRenderMode="none"
+                      />
+                    </div>
+                    
+                    {/* File preview buttons for file products */}
+                    {item.is_custom && item.custom_description?.startsWith('data:') && (
+                      <div className="flex items-center gap-1 ml-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
+                            setPreviewFile({
+                              fileName: item.custom_name || 'Nieznany plik',
+                              fileType: fileType,
+                              fileUrl: item.custom_description || '',
+                              fileData: null
+                            });
+                            setIsPreviewOpen(true);
+                          }}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+                          title="Podgląd pliku"
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            // Handle print
+                            if (item.custom_description?.startsWith('data:')) {
+                              const printWindow = window.open('', '_blank');
+                              if (printWindow) {
+                                const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
+                                if (fileType === 'pdf') {
+                                  printWindow.location.href = item.custom_description;
+                                } else {
+                                  printWindow.document.write(`
+                                    <!DOCTYPE html>
+                                    <html>
+                                    <head>
+                                      <title>Wydruk: ${item.custom_name}</title>
+                                      <style>
+                                        body { margin: 0; padding: 20px; text-align: center; }
+                                        img { max-width: 100%; height: auto; }
+                                        @media print { body { margin: 0; } }
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <h1>${item.custom_name}</h1>
+                                      <img src="${item.custom_description}" alt="${item.custom_name}" />
+                                    </body>
+                                    </html>
+                                  `);
+                                  printWindow.document.close();
+                                }
+                                printWindow.print();
+                              }
+                            }
+                          }}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+                          title="Wydrukuj plik"
+                        >
+                          <Printer className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   {/* Render accessories vertically below main item */}
                   {expandedItems.has(item.id) && !item.is_custom && (
                     <div className="ml-2 space-y-1 animate-accordion-down">
@@ -1361,6 +1432,21 @@ interface WarehouseTileProps {
           </div>
         </CardContent>
       </Card>
+      
+      {/* File Preview Modal */}
+      {previewFile && (
+        <FilePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => {
+            setIsPreviewOpen(false);
+            setPreviewFile(null);
+          }}
+          fileName={previewFile.fileName}
+          fileType={previewFile.fileType}
+          fileUrl={previewFile.fileUrl}
+          fileData={previewFile.fileData}
+        />
+      )}
     );
   }
 
