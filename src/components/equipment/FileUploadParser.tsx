@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Upload, FileText, FileSpreadsheet, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
-import * as pdfParse from 'pdf-parse';
+import * as pdfjsLib from 'pdfjs-dist';
 import { createWorker } from 'tesseract.js';
 
 interface ParsedEquipment {
@@ -45,8 +45,20 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
   const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const data = await pdfParse(arrayBuffer);
-      return data.text;
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      let fullText = '';
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      return fullText;
     } catch (error) {
       console.error('Error parsing PDF:', error);
       throw new Error('Nie udało się odczytać tekstu z PDF');
@@ -69,35 +81,38 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
       setProcessingStep('Konwertowanie PDF na obrazy...');
       setProgress(30);
 
-      // Convert PDF to images (simplified - in real implementation you'd use pdf2pic or similar)
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      // Convert PDF pages to canvas using pdfjs-dist
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       
-      // This is a simplified approach - for production, use a proper PDF to image converter
-      const img = new Image();
-      const url = URL.createObjectURL(file);
+      let fullText = '';
       
-      return new Promise((resolve, reject) => {
-        img.onload = async () => {
-          try {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx?.drawImage(img, 0, 0);
-            
-            setProcessingStep('Rozpoznawanie tekstu...');
-            setProgress(50);
-            
-            const { data: { text } } = await worker.recognize(canvas);
-            await worker.terminate();
-            URL.revokeObjectURL(url);
-            resolve(text);
-          } catch (error) {
-            reject(error);
-          }
-        };
-        img.onerror = () => reject(new Error('Nie udało się załadować obrazu'));
-        img.src = url;
-      });
+      for (let i = 1; i <= pdf.numPages; i++) {
+        setProcessingStep(`Przetwarzanie strony ${i} z ${pdf.numPages}...`);
+        setProgress(30 + (i / pdf.numPages) * 40);
+        
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2.0 });
+        
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        await page.render({
+          canvasContext: context!,
+          viewport: viewport
+        }).promise;
+        
+        setProcessingStep(`Rozpoznawanie tekstu ze strony ${i}...`);
+        setProgress(50 + (i / pdf.numPages) * 30);
+        
+        const { data: { text } } = await worker.recognize(canvas);
+        fullText += text + '\n';
+      }
+      
+      await worker.terminate();
+      return fullText;
     } catch (error) {
       console.error('Error with OCR:', error);
       throw new Error('Nie udało się rozpoznać tekstu z PDF');
