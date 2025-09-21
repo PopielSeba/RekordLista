@@ -807,6 +807,33 @@ export type Database = {
           },
         ]
       }
+      system_passwords: {
+        Row: {
+          id: string
+          password_name: string
+          password_value: string
+          description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          password_name: string
+          password_value: string
+          description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          password_name?: string
+          password_value?: string
+          description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -855,7 +882,7 @@ export type Database = {
     }
     Enums: {
       plot_status: "pending" | "approved" | "rejected"
-      user_role: "admin" | "pracownik"
+      user_role: "admin" | "pracownik" | "koordynacja_przesylek" | "pracownik_dzialu" | "pracownik_budowy"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -984,7 +1011,7 @@ export const Constants = {
   public: {
     Enums: {
       plot_status: ["pending", "approved", "rejected"],
-      user_role: ["admin", "pracownik"],
+      user_role: ["admin", "pracownik", "koordynacja_przesylek", "pracownik_dzialu", "pracownik_budowy"],
     },
   },
 } as const

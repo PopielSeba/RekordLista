@@ -2,12 +2,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Building2, 
   Package,
-  FolderOpen
+  FolderOpen,
+  Users,
+  Lock
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { AdminProjects } from './AdminProjects';
 import { AdminDepartments } from './AdminDepartments';
 import { AdminEquipment } from './AdminEquipment';
+import { UserRoleManager } from '@/components/admin/UserRoleManager';
+import { PasswordManager } from '@/components/admin/PasswordManager';
 
 const Admin = () => {
   return (
@@ -23,7 +27,7 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="projects" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="projects" className="flex items-center gap-2">
               <FolderOpen className="h-4 w-4" />
               Projekty
@@ -35,6 +39,14 @@ const Admin = () => {
             <TabsTrigger value="equipment" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Sprzęt
+            </TabsTrigger>
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Użytkownicy
+            </TabsTrigger>
+            <TabsTrigger value="passwords" className="flex items-center gap-2">
+              <Lock className="h-4 w-4" />
+              Hasła
             </TabsTrigger>
           </TabsList>
           
@@ -48,6 +60,14 @@ const Admin = () => {
           
           <TabsContent value="equipment" className="mt-6">
             <AdminEquipment />
+          </TabsContent>
+          
+          <TabsContent value="users" className="mt-6">
+            <UserRoleManager />
+          </TabsContent>
+          
+          <TabsContent value="passwords" className="mt-6">
+            <PasswordManager />
           </TabsContent>
         </Tabs>
       </main>
