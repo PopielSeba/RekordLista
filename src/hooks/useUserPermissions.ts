@@ -23,8 +23,8 @@ export const useUserPermissions = () => {
     canUpdateEquipment: isAuthenticated,
     canManageWarehouses: isAuthenticated,
     canAddWarehouses: isAuthenticated,
-    // Only admin can delete (temporarily allow all authenticated users)
-    canDeleteProjects: isAuthenticated, // Changed from isAdmin to isAuthenticated
+    // Only admin can delete
+    canDeleteProjects: isAdmin,
     canDeleteDepartments: isAdmin,
   };
 };
