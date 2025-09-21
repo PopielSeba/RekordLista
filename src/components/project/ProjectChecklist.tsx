@@ -714,14 +714,14 @@ const DepartmentTile = ({
                     <FileUploadParser
                       onEquipmentParsed={async (parsedEquipment) => {
                         try {
-                          // Add each parsed equipment as custom equipment
+                          // Add each selected equipment as custom equipment
                           for (const item of parsedEquipment) {
                             const equipmentData = {
                               project_id: projectId,
                               department_id: department.id,
                               custom_name: item.name,
-                              custom_description: `Zaimportowane z pliku (${item.source})`,
-                              quantity: 1,
+                              custom_description: `Zaimportowane z Excel${item.code ? ` (Kod: ${item.code})` : ''}`,
+                              quantity: item.quantity || 1,
                               is_custom: true,
                               status: 'pending'
                             };
@@ -748,15 +748,16 @@ const DepartmentTile = ({
                                 department: department.name,
                                 department_id: department.id,
                                 status: 'pending',
-                                description: `Zaimportowane z pliku (${item.source})`,
-                                confidence: item.confidence
+                                description: `Zaimportowane z Excel${item.code ? ` (Kod: ${item.code})` : ''}`,
+                                quantity: item.quantity || 1,
+                                code: item.code
                               }
                             });
                           }
 
                           toast({
                             title: "Sukces",
-                            description: `Dodano ${parsedEquipment.length} artykułów z pliku`,
+                            description: `Dodano ${parsedEquipment.length} produktów z pliku`,
                           });
 
                           onEquipmentAdded();
@@ -765,7 +766,7 @@ const DepartmentTile = ({
                           console.error('Error adding equipment from file:', error);
                           toast({
                             title: "Błąd",
-                            description: "Nie udało się dodać wszystkich artykułów z pliku",
+                            description: "Nie udało się dodać wszystkich produktów z pliku",
                             variant: "destructive",
                           });
                         }

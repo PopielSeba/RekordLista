@@ -8,16 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Upload, FileText, FileSpreadsheet, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
-import * as pdfjsLib from 'pdfjs-dist';
-import { createWorker } from 'tesseract.js';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 interface ParsedEquipment {
   name: string;
+  code?: string;
+  quantity?: number;
   confidence: number;
-  source: 'excel' | 'pdf-text' | 'pdf-ocr';
+  source: 'excel';
+  selected: boolean;
 }
 
 interface FileUploadParserProps {
@@ -45,82 +43,6 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
     }
   };
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      
-      let fullText = '';
-      
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        fullText += pageText + '\n';
-      }
-      
-      return fullText;
-    } catch (error) {
-      console.error('Error parsing PDF:', error);
-      throw new Error('Nie udało się odczytać tekstu z PDF');
-    }
-  };
-
-  const extractTextFromPDFWithOCR = async (file: File): Promise<string> => {
-    try {
-      setProcessingStep('Przygotowywanie OCR...');
-      setProgress(10);
-
-      const worker = await createWorker('pol', 1, {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            setProgress(20 + (m.progress * 60));
-          }
-        }
-      });
-
-      setProcessingStep('Konwertowanie PDF na obrazy...');
-      setProgress(30);
-
-      // Convert PDF pages to canvas using pdfjs-dist
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      
-      let fullText = '';
-      
-      for (let i = 1; i <= pdf.numPages; i++) {
-        setProcessingStep(`Przetwarzanie strony ${i} z ${pdf.numPages}...`);
-        setProgress(30 + (i / pdf.numPages) * 40);
-        
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2.0 });
-        
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        await page.render({
-          canvasContext: context!,
-          viewport: viewport
-        }).promise;
-        
-        setProcessingStep(`Rozpoznawanie tekstu ze strony ${i}...`);
-        setProgress(50 + (i / pdf.numPages) * 30);
-        
-        const { data: { text } } = await worker.recognize(canvas);
-        fullText += text + '\n';
-      }
-      
-      await worker.terminate();
-      return fullText;
-    } catch (error) {
-      console.error('Error with OCR:', error);
-      throw new Error('Nie udało się rozpoznać tekstu z PDF');
-    }
-  };
 
   const parseExcelFile = async (file: File): Promise<ParsedEquipment[]> => {
     try {
@@ -142,8 +64,10 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
         
         if (jsonData.length === 0) return;
         
-        // Look for table headers to find the "Nazwa" column
+        // Look for table headers to find columns
         let nazwaColumnIndex = -1;
+        let kodColumnIndex = -1;
+        let iloscColumnIndex = -1;
         let headerRowIndex = -1;
         
         // Check first few rows for headers
@@ -155,45 +79,58 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
             const cell = row[colIndex];
             if (typeof cell === 'string') {
               const lowerCell = cell.toLowerCase().trim();
+              
+              // Find Nazwa column
               if (['nazwa', 'name', 'artykuł', 'article', 'sprzęt', 'equipment', 'produkt', 'product'].includes(lowerCell)) {
                 nazwaColumnIndex = colIndex;
                 headerRowIndex = rowIndex;
-                break;
+              }
+              
+              // Find Kod column
+              if (['kod', 'code', 'kod sage', 'sage code', 'nr', 'number', 'id'].includes(lowerCell)) {
+                kodColumnIndex = colIndex;
+                headerRowIndex = rowIndex;
+              }
+              
+              // Find Ilość column
+              if (['ilość', 'quantity', 'qty', 'szt', 'sztuki', 'pieces', 'ilość szt'].includes(lowerCell)) {
+                iloscColumnIndex = colIndex;
+                headerRowIndex = rowIndex;
               }
             }
           }
-          if (nazwaColumnIndex !== -1) break;
         }
         
         // If we found a header row, process data rows
-        if (nazwaColumnIndex !== -1 && headerRowIndex !== -1) {
+        if (headerRowIndex !== -1) {
           for (let rowIndex = headerRowIndex + 1; rowIndex < jsonData.length; rowIndex++) {
             const row = jsonData[rowIndex] as any[];
-            if (!row || row.length <= nazwaColumnIndex) continue;
+            if (!row) continue;
             
-            const cell = row[nazwaColumnIndex];
-            if (typeof cell === 'string' && cell.trim()) {
-              const trimmedCell = cell.trim();
+            // Extract data from each column
+            const nazwa = nazwaColumnIndex !== -1 && row[nazwaColumnIndex] ? String(row[nazwaColumnIndex]).trim() : '';
+            const kod = kodColumnIndex !== -1 && row[kodColumnIndex] ? String(row[kodColumnIndex]).trim() : '';
+            const ilosc = iloscColumnIndex !== -1 && row[iloscColumnIndex] ? 
+              (typeof row[iloscColumnIndex] === 'number' ? row[iloscColumnIndex] : 
+               parseFloat(String(row[iloscColumnIndex]).replace(',', '.'))) : 1;
+            
+            // Validate that we have at least a name
+            if (nazwa && nazwa.length > 3 && nazwa.length < 100) {
+              // Check if we already have this equipment (avoid duplicates)
+              const exists = equipment.some(eq => 
+                eq.name.toLowerCase() === nazwa.toLowerCase() && 
+                (!kod || eq.code === kod)
+              );
               
-              // Validate that this looks like an equipment name
-              if (trimmedCell.length > 3 && 
-                  trimmedCell.length < 100 &&
-                  !trimmedCell.match(/^\d+$/) && // Not just numbers
-                  !trimmedCell.match(/^\d+[.,]\d+$/) && // Not decimal numbers
-                  !['lp', 'l.p', 'nazwa', 'name', 'kod', 'code', 'ilość', 'quantity', 'jm', 'jednostka', 'szt', 'sztuki'].includes(trimmedCell.toLowerCase())
-              ) {
-                // Check if we already have this equipment (avoid duplicates)
-                const exists = equipment.some(eq => 
-                  eq.name.toLowerCase() === trimmedCell.toLowerCase()
-                );
-                
-                if (!exists) {
-                  equipment.push({
-                    name: trimmedCell,
-                    confidence: 0.9,
-                    source: 'excel'
-                  });
-                }
+              if (!exists) {
+                equipment.push({
+                  name: nazwa,
+                  code: kod || undefined,
+                  quantity: isNaN(ilosc) ? 1 : ilosc,
+                  confidence: 0.9,
+                  source: 'excel',
+                  selected: false
+                });
               }
             }
           }
@@ -220,7 +157,8 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
                     equipment.push({
                       name: trimmedCell,
                       confidence: 0.7,
-                      source: 'excel'
+                      source: 'excel',
+                      selected: false
                     });
                   }
                 }
@@ -238,163 +176,6 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
     }
   };
 
-  const extractEquipmentFromText = (text: string, source: 'pdf-text' | 'pdf-ocr'): ParsedEquipment[] => {
-    const equipment: ParsedEquipment[] = [];
-    
-    // Split text into lines and look for potential equipment names
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
-    // Look for table structure patterns
-    let inTable = false;
-    let tableHeaderFound = false;
-    let columnIndex = -1;
-    
-    // Common table headers in Polish
-    const tableHeaders = ['nazwa', 'name', 'artykuł', 'article', 'sprzęt', 'equipment', 'produkt', 'product'];
-    const quantityHeaders = ['ilość', 'quantity', 'qty', 'szt', 'sztuki', 'pieces'];
-    const codeHeaders = ['kod', 'code', 'nr', 'number', 'id'];
-    
-    lines.forEach((line, lineIndex) => {
-      const lowerLine = line.toLowerCase();
-      
-      // Check if this line contains table headers
-      if (!tableHeaderFound && (
-        tableHeaders.some(header => lowerLine.includes(header)) ||
-        lowerLine.includes('lp.') || lowerLine.includes('l.p.') ||
-        lowerLine.includes('jednostka') || lowerLine.includes('jm')
-      )) {
-        tableHeaderFound = true;
-        inTable = true;
-        
-        // Try to find the "Nazwa" column index
-        const words = line.split(/\s+/);
-        const nazwaIndex = words.findIndex(word => 
-          ['nazwa', 'name', 'artykuł', 'article', 'sprzęt', 'equipment'].includes(word.toLowerCase())
-        );
-        if (nazwaIndex !== -1) {
-          columnIndex = nazwaIndex;
-        }
-        return;
-      }
-      
-      // If we're in a table, look for data rows
-      if (inTable && tableHeaderFound) {
-        // Skip empty lines
-        if (line.length < 3) return;
-        
-        // Check if this looks like a data row (contains numbers and text)
-        const words = line.split(/\s+/);
-        
-        // Look for patterns that suggest this is a table row
-        const hasNumber = words.some(word => /^\d+$/.test(word)); // Contains numbers
-        const hasText = words.some(word => /[a-zA-Z]/.test(word)); // Contains letters
-        const hasCodePattern = words.some(word => /^\d+\.\d+\.\d+\.\d+/.test(word)); // Contains code pattern like 03.07.01.00075
-        
-        if (hasNumber && hasText && words.length >= 3) {
-          // This looks like a table row
-          let equipmentName = '';
-          
-          if (columnIndex !== -1 && words[columnIndex]) {
-            // Use the column index we found
-            equipmentName = words[columnIndex];
-          } else {
-            // Try to find equipment name by looking for patterns
-            // Equipment names often start with letters and contain numbers
-            const potentialNames = words.filter(word => 
-              /^[A-Za-z]/.test(word) && // Starts with letter
-              word.length > 3 && // Not too short
-              !/^\d+$/.test(word) && // Not just numbers
-              !/^\d+[.,]\d+$/.test(word) && // Not decimal numbers
-              !['szt', 'sztuki', 'pieces', 'ilość', 'quantity'].includes(word.toLowerCase()) // Not quantity units
-            );
-            
-            if (potentialNames.length > 0) {
-              // Take the first potential name, or join multiple if they seem related
-              equipmentName = potentialNames[0];
-              
-              // If there are multiple potential names and they seem related, join them
-              if (potentialNames.length > 1) {
-                const joined = potentialNames.join(' ');
-                if (joined.length < 50) { // Reasonable length
-                  equipmentName = joined;
-                }
-              }
-            }
-          }
-          
-          // Additional validation for equipment names
-          if (equipmentName && 
-              equipmentName.length > 3 && 
-              equipmentName.length < 100 &&
-              !equipmentName.match(/^\d+$/) &&
-              !equipmentName.match(/^\d+[.,]\d+$/) &&
-              !['lp', 'l.p', 'nazwa', 'name', 'kod', 'code', 'ilość', 'quantity', 'jm', 'jednostka'].includes(equipmentName.toLowerCase())
-          ) {
-            // Clean up the name (remove extra spaces, etc.)
-            const cleanName = equipmentName.trim().replace(/\s+/g, ' ');
-            
-            // Check if we already have this equipment (avoid duplicates)
-            const exists = equipment.some(eq => 
-              eq.name.toLowerCase() === cleanName.toLowerCase()
-            );
-            
-            if (!exists) {
-              equipment.push({
-                name: cleanName,
-                confidence: source === 'pdf-text' ? 0.9 : 0.7,
-                source
-              });
-            }
-          }
-        }
-      }
-      
-      // Reset table detection if we hit an empty line or non-table content
-      if (inTable && line.length < 3) {
-        inTable = false;
-        tableHeaderFound = false;
-        columnIndex = -1;
-      }
-    });
-    
-    // If we didn't find any equipment using table detection, fall back to the original method
-    if (equipment.length === 0) {
-      lines.forEach(line => {
-        const words = line.split(/\s+/);
-        
-        if (words.length >= 1 && words.length <= 5) {
-          const potentialName = words.join(' ');
-          
-          const excludeWords = [
-            'strona', 'page', 'data', 'date', 'nr', 'no', 'ilość', 'quantity',
-            'cena', 'price', 'suma', 'total', 'razem', 'together', 'spis', 'list',
-            'nazwa', 'name', 'opis', 'description', 'uwagi', 'notes', 'uwaga', 'note',
-            'lp', 'l.p', 'kod', 'code', 'jm', 'jednostka', 'szt', 'sztuki'
-          ];
-          
-          const isExcluded = excludeWords.some(word => 
-            potentialName.toLowerCase().includes(word.toLowerCase())
-          );
-          
-          if (!isExcluded && 
-              potentialName.length > 3 && 
-              potentialName.length < 100 &&
-              !potentialName.match(/^\d+$/) &&
-              !potentialName.match(/^[A-Za-z]\d+$/) &&
-              !potentialName.match(/^\d+[.,]\d+$/)
-          ) {
-            equipment.push({
-              name: potentialName,
-              confidence: source === 'pdf-text' ? 0.8 : 0.6,
-              source
-            });
-          }
-        }
-      });
-    }
-    
-    return equipment;
-  };
 
   const processFile = async () => {
     if (!selectedFile) return;
@@ -404,64 +185,25 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
     setParsedEquipment([]);
 
     try {
-      let equipment: ParsedEquipment[] = [];
       const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase();
 
       if (fileExtension === 'xlsx' || fileExtension === 'xls') {
-        equipment = await parseExcelFile(selectedFile);
-      } else if (fileExtension === 'pdf') {
-        setProcessingStep('Próba odczytu tekstu z PDF...');
-        setProgress(10);
+        const equipment = await parseExcelFile(selectedFile);
         
-        try {
-          // First try to extract text directly
-          const text = await extractTextFromPDF(selectedFile);
-          if (text.trim().length > 50) {
-            setProcessingStep('Analizowanie tekstu...');
-            setProgress(60);
-            equipment = extractEquipmentFromText(text, 'pdf-text');
-          } else {
-            // If no text found, try OCR
-            setProcessingStep('Brak tekstu, próba OCR...');
-            setProgress(20);
-            const ocrText = await extractTextFromPDFWithOCR(selectedFile);
-            setProcessingStep('Analizowanie rozpoznanego tekstu...');
-            setProgress(70);
-            equipment = extractEquipmentFromText(ocrText, 'pdf-ocr');
-          }
-        } catch (error) {
-          // Fallback to OCR if direct text extraction fails
-          setProcessingStep('Próba OCR...');
-          setProgress(20);
-          const ocrText = await extractTextFromPDFWithOCR(selectedFile);
-          setProcessingStep('Analizowanie rozpoznanego tekstu...');
-          setProgress(70);
-          equipment = extractEquipmentFromText(ocrText, 'pdf-ocr');
-        }
+        setProgress(90);
+        setProcessingStep('Finalizowanie...');
+        
+        setParsedEquipment(equipment);
+        setProgress(100);
+        setProcessingStep('Zakończono');
+
+        toast({
+          title: "Sukces",
+          description: `Znaleziono ${equipment.length} produktów`,
+        });
       } else {
-        throw new Error('Nieobsługiwany format pliku. Obsługiwane formaty: Excel (.xlsx, .xls), PDF (.pdf)');
+        throw new Error('Nieobsługiwany format pliku. Obsługiwane formaty: Excel (.xlsx, .xls)');
       }
-
-      setProgress(90);
-      setProcessingStep('Finalizowanie...');
-      
-      // Remove duplicates and sort by confidence
-      const uniqueEquipment = equipment.reduce((acc, current) => {
-        const existing = acc.find(item => item.name.toLowerCase() === current.name.toLowerCase());
-        if (!existing || current.confidence > existing.confidence) {
-          return acc.filter(item => item.name.toLowerCase() !== current.name.toLowerCase()).concat(current);
-        }
-        return acc;
-      }, [] as ParsedEquipment[]);
-
-      setParsedEquipment(uniqueEquipment);
-      setProgress(100);
-      setProcessingStep('Zakończono');
-
-      toast({
-        title: "Sukces",
-        description: `Znaleziono ${uniqueEquipment.length} potencjalnych artykułów`,
-      });
 
     } catch (error: any) {
       console.error('Error processing file:', error);
@@ -476,27 +218,50 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
   };
 
   const handleConfirm = () => {
-    if (parsedEquipment.length > 0) {
-      onEquipmentParsed(parsedEquipment);
+    const selectedEquipment = parsedEquipment.filter(eq => eq.selected);
+    if (selectedEquipment.length > 0) {
+      onEquipmentParsed(selectedEquipment);
       onClose();
+    } else {
+      toast({
+        title: "Błąd",
+        description: "Wybierz przynajmniej jeden produkt",
+        variant: "destructive",
+      });
     }
+  };
+
+  const toggleEquipmentSelection = (index: number) => {
+    setParsedEquipment(prev => 
+      prev.map((eq, i) => 
+        i === index ? { ...eq, selected: !eq.selected } : eq
+      )
+    );
+  };
+
+  const selectAll = () => {
+    setParsedEquipment(prev => 
+      prev.map(eq => ({ ...eq, selected: true }))
+    );
+  };
+
+  const selectNone = () => {
+    setParsedEquipment(prev => 
+      prev.map(eq => ({ ...eq, selected: false }))
+    );
   };
 
   const getSourceIcon = (source: string) => {
     switch (source) {
       case 'excel': return <FileSpreadsheet className="h-4 w-4" />;
-      case 'pdf-text': return <FileText className="h-4 w-4" />;
-      case 'pdf-ocr': return <FileText className="h-4 w-4" />;
-      default: return <FileText className="h-4 w-4" />;
+      default: return <FileSpreadsheet className="h-4 w-4" />;
     }
   };
 
   const getSourceLabel = (source: string) => {
     switch (source) {
       case 'excel': return 'Excel';
-      case 'pdf-text': return 'PDF (tekst)';
-      case 'pdf-ocr': return 'PDF (OCR)';
-      default: return 'Nieznane';
+      default: return 'Excel';
     }
   };
 
@@ -516,13 +281,13 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
               ref={fileInputRef}
               id="file-upload"
               type="file"
-              accept=".xlsx,.xls,.pdf"
+              accept=".xlsx,.xls"
               onChange={handleFileSelect}
               className="w-full p-2 border border-gray-300 rounded-md"
               disabled={isProcessing}
             />
             <p className="text-sm text-gray-500">
-              Obsługiwane formaty: Excel (.xlsx, .xls), PDF (.pdf)
+              Obsługiwane formaty: Excel (.xlsx, .xls)
             </p>
           </div>
 
@@ -573,9 +338,19 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
       {parsedEquipment.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-              Znalezione artykuły ({parsedEquipment.length})
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                Znalezione produkty ({parsedEquipment.length})
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={selectAll}>
+                  Zaznacz wszystkie
+                </Button>
+                <Button variant="outline" size="sm" onClick={selectNone}>
+                  Odznacz wszystkie
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -583,31 +358,51 @@ export const FileUploadParser: React.FC<FileUploadParserProps> = ({
               {parsedEquipment.map((item, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-2 border rounded-md"
+                  className={`flex items-center gap-3 p-3 border rounded-md ${
+                    item.selected ? 'bg-blue-50 border-blue-200' : 'bg-white'
+                  }`}
                 >
-                  <div className="flex items-center gap-2">
-                    {getSourceIcon(item.source)}
-                    <span className="font-medium">{item.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {getSourceLabel(item.source)}
-                    </Badge>
+                  <input
+                    type="checkbox"
+                    checked={item.selected}
+                    onChange={() => toggleEquipmentSelection(index)}
+                    className="h-4 w-4 text-blue-600 rounded"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      {getSourceIcon(item.source)}
+                      <span className="font-medium">{item.name}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {getSourceLabel(item.source)}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-4 text-sm text-gray-600">
+                      {item.code && (
+                        <span>Kod: <strong>{item.code}</strong></span>
+                      )}
+                      {item.quantity && item.quantity > 1 && (
+                        <span>Ilość: <strong>{item.quantity}</strong></span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={item.confidence > 0.8 ? "default" : "secondary"}
-                      className="text-xs"
-                    >
-                      {Math.round(item.confidence * 100)}%
-                    </Badge>
-                  </div>
+                  <Badge
+                    variant={item.confidence > 0.8 ? "default" : "secondary"}
+                    className="text-xs"
+                  >
+                    {Math.round(item.confidence * 100)}%
+                  </Badge>
                 </div>
               ))}
             </div>
 
             <div className="mt-4 flex gap-2">
-              <Button onClick={handleConfirm} className="flex-1">
+              <Button 
+                onClick={handleConfirm} 
+                className="flex-1"
+                disabled={parsedEquipment.filter(eq => eq.selected).length === 0}
+              >
                 <CheckCircle className="h-4 w-4 mr-2" />
-                Dodaj wybrane artykuły
+                Dodaj wybrane produkty ({parsedEquipment.filter(eq => eq.selected).length})
               </Button>
               <Button variant="outline" onClick={() => setParsedEquipment([])}>
                 <XCircle className="h-4 w-4 mr-2" />
