@@ -35,30 +35,6 @@ export interface DatabaseProject {
   color?: string;
 }
 
-// Helper functions for localStorage
-const saveProjectsToStorage = (projects: DatabaseProject[]) => {
-  try {
-    localStorage.setItem('projects_colors', JSON.stringify(projects.map(p => ({ id: p.id, color: p.color }))));
-  } catch (error) {
-    console.warn('Failed to save projects colors to localStorage:', error);
-  }
-};
-
-const loadProjectsFromStorage = (): Record<string, string> => {
-  try {
-    const stored = localStorage.getItem('projects_colors');
-    if (stored) {
-      const colors = JSON.parse(stored);
-      return colors.reduce((acc: Record<string, string>, item: { id: string, color: string }) => {
-        acc[item.id] = item.color;
-        return acc;
-      }, {});
-    }
-  } catch (error) {
-    console.warn('Failed to load projects colors from localStorage:', error);
-  }
-  return {};
-};
 
 export const useProjects = () => {
   const [projects, setProjects] = useState<DatabaseProject[]>([]);
@@ -73,19 +49,11 @@ export const useProjects = () => {
 
       if (error) throw error;
       
-      // Load colors from localStorage
-      const storedColors = loadProjectsFromStorage();
-      
-      const newProjects = data?.map(project => ({
+      setProjects(data?.map(project => ({
         ...project,
         status: project.status as 'active' | 'completed' | 'pending',
-        color: storedColors[project.id] || project.color || '#3b82f6' // Use stored color, then DB color, then default
-      })) || [];
-      
-      setProjects(newProjects);
-      
-      // Save colors to localStorage
-      saveProjectsToStorage(newProjects);
+        color: project.color || '#3b82f6' // Use DB color or default
+      })) || []);
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast({
@@ -100,28 +68,20 @@ export const useProjects = () => {
 
   const createProject = async (projectData: Omit<DatabaseProject, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      // Remove color field if it exists, as the column might not exist in the database yet
-      const { color, ...projectDataWithoutColor } = projectData as any;
-      
       const { data, error } = await supabase
         .from('projects')
-        .insert([projectDataWithoutColor])
+        .insert([projectData])
         .select()
         .single();
 
       if (error) throw error;
       
-      // Add default color if not provided
-      const projectWithColor = { ...data, color: color || '#3b82f6' };
-      
-      const newProjects = [{ ...projectWithColor, status: data.status as 'active' | 'completed' | 'pending' }, ...projects];
-      setProjects(newProjects);
-      saveProjectsToStorage(newProjects);
+      setProjects(prev => [{ ...data, status: data.status as 'active' | 'completed' | 'pending' }, ...prev]);
       toast({
         title: "Sukces",
         description: "Projekt został utworzony"
       });
-      return { success: true, data: projectWithColor };
+      return { success: true, data };
     } catch (error) {
       console.error('Error creating project:', error);
       toast({
@@ -135,34 +95,21 @@ export const useProjects = () => {
 
   const updateProject = async (id: string, updates: Partial<DatabaseProject>) => {
     try {
-      // Remove color field if it exists, as the column might not exist in the database yet
-      const { color, ...updatesWithoutColor } = updates as any;
-      
       const { data, error } = await supabase
         .from('projects')
-        .update(updatesWithoutColor)
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
       
-      // Find the existing project to preserve its color
-      const existingProject = projects.find(p => p.id === id);
-      const existingColor = existingProject?.color || '#3b82f6';
-      
-      // Use the new color if provided, otherwise keep the existing color
-      const finalColor = color || existingColor;
-      const dataWithColor = { ...data, color: finalColor };
-
-      const newProjects = projects.map(p => p.id === id ? { ...dataWithColor, status: data.status as 'active' | 'completed' | 'pending' } : p);
-      setProjects(newProjects);
-      saveProjectsToStorage(newProjects);
+      setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
       toast({
         title: "Sukces",
         description: "Projekt został zaktualizowany"
       });
-      return { success: true, data: dataWithColor };
+      return { success: true, data };
     } catch (error) {
       console.error('Error updating project:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
@@ -187,20 +134,17 @@ export const useProjects = () => {
       if (fetchError) throw fetchError;
 
       // Create new project with reverse flow
-      // Get the source color from the local projects state (which has the color)
-      const localSourceProject = projects.find(p => p.id === sourceProjectId);
-      const sourceColor = localSourceProject?.color || sourceProject.color || '#3b82f6';
+      const sourceColor = sourceProject.color || '#3b82f6';
       const lighterColor = lightenColor(sourceColor, 0.4); // Make it 40% lighter
       
-      // Remove color field as it might not exist in the database yet
       const newProjectData = {
         name: `${sourceProject.name} - Wysyłka Powrotna`,
         description: `Wysyłka powrotna sprzętu z projektu: ${sourceProject.description}`,
         status: 'active' as const,
         start_date: new Date().toISOString().split('T')[0],
         location: sourceProject.location,
-        reverse_flow: true
-        // color: lighterColor - removed as column might not exist
+        reverse_flow: true,
+        color: lighterColor
       };
 
       const { data: newProject, error: createError } = await supabase
@@ -210,9 +154,6 @@ export const useProjects = () => {
         .single();
 
       if (createError) throw createError;
-
-      // Add color back to the new project data
-      const newProjectWithColor = { ...newProject, color: lighterColor };
 
       // Copy project equipment but with different status for reverse flow
       const { data: sourceEquipment, error: equipmentError } = await supabase
@@ -232,7 +173,7 @@ export const useProjects = () => {
         const newEquipment = sourceEquipment.map(({ id: oldId, created_at: _createdAt, updated_at: _updatedAt, project_id: _oldProjectId, project_parent_id, ...rest }) => ({
           ...rest,
           id: idMapping.get(oldId as string)!,
-          project_id: newProjectWithColor.id,
+          project_id: newProject.id,
           project_parent_id: project_parent_id ? idMapping.get(project_parent_id as string) ?? null : null,
           status: 'delivered',
           intermediate_warehouse_id: null
@@ -257,7 +198,7 @@ export const useProjects = () => {
       if (sourceDepartments && sourceDepartments.length > 0) {
         const newDepartments = sourceDepartments.map(({ id: _oldId, created_at: _createdAt, ...rest }) => ({
           ...rest,
-          project_id: newProjectWithColor.id
+          project_id: newProject.id
         }));
 
         const { error: insertDeptError } = await supabase
@@ -278,7 +219,7 @@ export const useProjects = () => {
       if (sourceDestinations && sourceDestinations.length > 0) {
         const newDestinations = sourceDestinations.map(({ id: _oldId, created_at: _createdAt, updated_at: _updatedAt, project_id: _oldProjectId, ...rest }) => ({
           ...rest,
-          project_id: newProjectWithColor.id
+          project_id: newProject.id
         }));
 
         const { error: insertDestError } = await supabase
@@ -288,14 +229,12 @@ export const useProjects = () => {
         if (insertDestError) throw insertDestError;
       }
 
-      const newProjects = [{ ...newProjectWithColor, status: newProjectWithColor.status as 'active' | 'completed' | 'pending' }, ...projects];
-      setProjects(newProjects);
-      saveProjectsToStorage(newProjects);
+      setProjects(prev => [{ ...newProject, status: newProject.status as 'active' | 'completed' | 'pending' }, ...prev]);
       toast({
         title: "Sukces",
         description: "Projekt wysyłki powrotnej został utworzony"
       });
-      return { success: true, data: newProjectWithColor };
+      return { success: true, data: newProject };
     } catch (error) {
       console.error('Error copying project for return:', error);
       toast({
