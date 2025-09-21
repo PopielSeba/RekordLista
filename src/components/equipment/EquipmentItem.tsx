@@ -70,17 +70,17 @@ export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStat
   };
 
   const isFileProduct = () => {
-    return equipment.is_custom && equipment.project_files && equipment.project_files.length > 0;
+    return equipment.is_custom && equipment.custom_description?.startsWith('data:');
   };
 
   const getFileIcon = () => {
     if (!isFileProduct()) return <Package className="h-4 w-4 shrink-0" />;
     
-    const file = equipment.project_files?.[0];
-    if (!file) return <Package className="h-4 w-4 shrink-0" />;
+    const fileName = equipment.custom_name || '';
+    const fileType = fileName.split('.').pop()?.toLowerCase() || '';
     
-    if (file.file_type === 'pdf') return <FileText className="h-4 w-4 shrink-0" />;
-    if (['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff'].includes(file.file_type)) return <Image className="h-4 w-4 shrink-0" />;
+    if (fileType === 'pdf') return <FileText className="h-4 w-4 shrink-0" />;
+    if (['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff'].includes(fileType)) return <Image className="h-4 w-4 shrink-0" />;
     return <File className="h-4 w-4 shrink-0" />;
   };
 
@@ -93,34 +93,43 @@ export const EquipmentItem = ({ equipment, level = 0, isDraggable = true, onStat
   };
 
   const getFileType = () => {
-    const file = equipment.project_files?.[0];
-    return file?.file_type || 'unknown';
+    if (!equipment.custom_name) return 'unknown';
+    const extension = equipment.custom_name.split('.').pop()?.toLowerCase();
+    return extension || 'unknown';
   };
 
   const getFileUrl = () => {
-    const file = equipment.project_files?.[0];
-    if (!file) return `#${equipment.custom_name}`;
-    
-    return `data:${file.mime_type};base64,${file.file_data}`;
+    // Extract base64 data from custom_description if it contains file data
+    const description = equipment.custom_description || '';
+    if (description.startsWith('data:')) {
+      return description;
+    }
+    // Fallback to placeholder
+    return `#${equipment.custom_name}`;
   };
 
   const getFileData = () => {
-    const file = equipment.project_files?.[0];
-    if (!file) return null;
-    
-    try {
-      // Convert base64 to File object
-      const byteCharacters = atob(file.file_data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    const description = equipment.custom_description || '';
+    if (description.startsWith('data:')) {
+      // Extract the base64 part after the comma
+      const base64Data = description.split(',')[1];
+      if (base64Data) {
+        try {
+          // Convert base64 to File object
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const mimeType = description.split(';')[0].split(':')[1];
+          return new File([byteArray], equipment.custom_name || 'file', { type: mimeType });
+        } catch (error) {
+          console.error('Error converting base64 to file:', error);
+        }
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      return new File([byteArray], file.file_name, { type: file.mime_type });
-    } catch (error) {
-      console.error('Error converting base64 to file:', error);
-      return null;
     }
+    return null;
   };
 
   return (

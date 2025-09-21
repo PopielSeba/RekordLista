@@ -63,7 +63,7 @@ export const AdminEquipment = () => {
             .from('equipment')
             .select('*')
             .eq('parent_id', item.id)
-            .order('created_at');
+            .order('created_at', { ascending: true });
 
           return {
             ...item,
@@ -88,7 +88,7 @@ export const AdminEquipment = () => {
         .from('departments')
         .select('id, name')
         .eq('is_global', true)
-        .order('name');
+        .order('name', { ascending: true });
 
       if (error) throw error;
       setDepartments(data || []);

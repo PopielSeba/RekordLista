@@ -54,6 +54,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) {
         console.error('Error fetching profile:', error);
+        console.error('Error details:', { code: error.code, message: error.message, details: error.details });
+        
+        // If profile doesn't exist, try to create it
+        if (error.code === 'PGRST116') {
+          console.log('AuthContext: Profile not found, creating new profile');
+          return await createProfile(userId);
+        }
+        
+        // If it's an auth error, try to refresh session
+        if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+          console.log('AuthContext: Auth error, trying to refresh session');
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError || !session?.user) {
+            console.error('No valid session found after refresh:', sessionError);
+            return null;
+          }
+          // Try again with refreshed session
+          return await fetchProfile(userId);
+        }
+        
         return null;
       }
 
@@ -61,6 +81,73 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return data;
     } catch (error) {
       console.error('Error fetching profile:', error);
+      return null;
+    }
+  };
+
+  const createProfile = async (userId: string) => {
+    console.log('AuthContext: Creating profile for userId', userId);
+    try {
+      // Get user data from auth
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Error getting user data:', userError);
+        // If auth error, try to refresh session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session?.user) {
+          console.error('No valid session found:', sessionError);
+          return null;
+        }
+        // Use session user data
+        const sessionUser = session.user;
+        const profileData = {
+          user_id: userId,
+          display_name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'Użytkownik',
+          email: sessionUser.email
+        };
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .insert(profileData)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating profile with session data:', error);
+          return null;
+        }
+
+        console.log('AuthContext: Profile created successfully with session data', data);
+        return data;
+      }
+
+      if (!user) {
+        console.error('No user data available');
+        return null;
+      }
+
+      const profileData = {
+        user_id: userId,
+        display_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Użytkownik',
+        email: user.email
+      };
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert(profileData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        return null;
+      }
+
+      console.log('AuthContext: Profile created successfully', data);
+      return data;
+    } catch (error) {
+      console.error('Error creating profile:', error);
       return null;
     }
   };

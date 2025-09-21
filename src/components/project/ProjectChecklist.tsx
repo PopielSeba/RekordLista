@@ -331,35 +331,24 @@ const DepartmentTile = ({
         // Upload file to project_files table if file is selected
         if (selectedFile) {
           try {
-            // Convert file to base64 for storage
+            // Convert file to base64 for storage in custom_description (temporary solution)
             const fileDataBase64 = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = (e) => {
-                const result = e.target?.result as string;
-                // Remove data: prefix to get pure base64
-                const base64Data = result.split(',')[1];
-                resolve(base64Data);
+                resolve(e.target?.result as string);
               };
               reader.onerror = reject;
               reader.readAsDataURL(selectedFile);
             });
 
-            const fileData = {
-              project_id: projectId,
-              project_equipment_id: mainEquipmentResult.id,
-              file_name: selectedFile.name,
-              file_type: fileExtension || 'unknown',
-              file_size: selectedFile.size,
-              file_data: fileDataBase64,
-              mime_type: selectedFile.type
-            };
+            // Update the equipment with file data in custom_description
+            const { error: updateError } = await supabase
+              .from('project_equipment')
+              .update({ custom_description: fileDataBase64 })
+              .eq('id', mainEquipmentResult.id);
 
-            const { error: fileError } = await supabase
-              .from('project_files')
-              .insert(fileData);
-
-            if (fileError) {
-              console.error('Error uploading file:', fileError);
+            if (updateError) {
+              console.error('Error updating equipment with file:', updateError);
               toast({
                 title: "Ostrzeżenie",
                 description: "Produkt został dodany, ale plik nie został zapisany",
@@ -1367,35 +1356,33 @@ interface WarehouseTileProps {
                     </div>
                     
                     {/* File preview buttons for file products */}
-                    {item.is_custom && item.project_files && item.project_files.length > 0 && (
+                    {item.is_custom && item.custom_description?.startsWith('data:') && (
                       <div className="flex items-center gap-1 ml-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            // Get the first file from project_files
-                            const file = item.project_files?.[0];
-                            if (!file) return;
-                            
-                            const fileType = file.file_type;
-                            const fileName = file.file_name;
+                            const fileType = item.custom_name?.split('.').pop()?.toLowerCase() || 'unknown';
+                            const fileName = item.custom_name || 'Nieznany plik';
+                            const fileUrl = item.custom_description || '';
                             
                             // Convert base64 to File object
                             let fileData: File | null = null;
-                            try {
-                              const byteCharacters = atob(file.file_data);
-                              const byteNumbers = new Array(byteCharacters.length);
-                              for (let i = 0; i < byteCharacters.length; i++) {
-                                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            if (fileUrl.startsWith('data:')) {
+                              try {
+                                const base64Data = fileUrl.split(',')[1];
+                                const mimeType = fileUrl.split(';')[0].split(':')[1];
+                                const byteCharacters = atob(base64Data);
+                                const byteNumbers = new Array(byteCharacters.length);
+                                for (let i = 0; i < byteCharacters.length; i++) {
+                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                }
+                                const byteArray = new Uint8Array(byteNumbers);
+                                fileData = new File([byteArray], fileName, { type: mimeType });
+                              } catch (error) {
+                                console.error('Error converting base64 to file:', error);
                               }
-                              const byteArray = new Uint8Array(byteNumbers);
-                              fileData = new File([byteArray], fileName, { type: file.mime_type });
-                            } catch (error) {
-                              console.error('Error converting base64 to file:', error);
                             }
-                            
-                            // Create data URL for preview
-                            const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
                             
                             setPreviewFile({
                               fileName: fileName,
@@ -1415,35 +1402,34 @@ interface WarehouseTileProps {
                           size="sm"
                           onClick={() => {
                             // Handle print
-                            const file = item.project_files?.[0];
-                            if (!file) return;
-                            
-                            const printWindow = window.open('', '_blank');
-                            if (printWindow) {
-                              const fileUrl = `data:${file.mime_type};base64,${file.file_data}`;
-                              if (file.file_type === 'pdf') {
-                                printWindow.location.href = fileUrl;
-                              } else {
-                                printWindow.document.write(`
-                                  <!DOCTYPE html>
-                                  <html>
-                                  <head>
-                                    <title>Wydruk: ${file.file_name}</title>
-                                    <style>
-                                      body { margin: 0; padding: 20px; text-align: center; }
-                                      img { max-width: 100%; height: auto; }
-                                      @media print { body { margin: 0; } }
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <h1>${file.file_name}</h1>
-                                    <img src="${fileUrl}" alt="${file.file_name}" />
-                                  </body>
-                                  </html>
-                                `);
-                                printWindow.document.close();
+                            if (item.custom_description?.startsWith('data:')) {
+                              const printWindow = window.open('', '_blank');
+                              if (printWindow) {
+                                const fileType = item.custom_name?.split('.').pop()?.toLowerCase();
+                                if (fileType === 'pdf') {
+                                  printWindow.location.href = item.custom_description;
+                                } else {
+                                  printWindow.document.write(`
+                                    <!DOCTYPE html>
+                                    <html>
+                                    <head>
+                                      <title>Wydruk: ${item.custom_name}</title>
+                                      <style>
+                                        body { margin: 0; padding: 20px; text-align: center; }
+                                        img { max-width: 100%; height: auto; }
+                                        @media print { body { margin: 0; } }
+                                      </style>
+                                    </head>
+                                    <body>
+                                      <h1>${item.custom_name}</h1>
+                                      <img src="${item.custom_description}" alt="${item.custom_name}" />
+                                    </body>
+                                    </html>
+                                  `);
+                                  printWindow.document.close();
+                                }
+                                printWindow.print();
                               }
-                              printWindow.print();
                             }
                           }}
                           className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
@@ -2229,7 +2215,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
         department:departments(*)
       `)
       .eq('project_id', projectId)
-      .order('position_order');
+      .order('position_order', { ascending: true });
 
     if (error) {
       toast({
@@ -2247,7 +2233,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
     const { data, error } = await supabase
       .from('departments')
       .select('*')
-      .order('name');
+      .order('name', { ascending: true });
 
     if (error) {
       toast({
@@ -2266,7 +2252,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
       .from('intermediate_warehouses')
       .select('*')
       .eq('project_id', projectId)
-      .order('position_order');
+      .order('position_order', { ascending: true });
 
     if (error) {
       toast({
@@ -2284,7 +2270,7 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
     const { data, error } = await supabase
       .from('equipment')
       .select('*')
-      .order('name');
+      .order('name', { ascending: true });
 
     if (error) {
       toast({
@@ -2303,13 +2289,32 @@ export const ProjectChecklist = ({ projectId, reverseFlow = false }: ProjectChec
       .from('project_equipment')
       .select(`
         *,
-        equipment:equipment(*),
-        project_files:project_files(*)
+        equipment:equipment(*)
       `)
       .eq('project_id', projectId)
-      .order('created_at');
+      .order('created_at', { ascending: true });
 
     if (error) {
+      console.error('Error fetching project equipment:', error);
+      console.error('Error details:', { code: error.code, message: error.message, details: error.details });
+      
+      // If it's an auth error, try to refresh session
+      if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+        console.log('ProjectChecklist: Auth error, trying to refresh session');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session?.user) {
+          console.error('No valid session found after refresh:', sessionError);
+          toast({
+            title: "Błąd autoryzacji",
+            description: "Sesja wygasła. Zaloguj się ponownie.",
+            variant: "destructive",
+          });
+          return;
+        }
+        // Try again with refreshed session
+        return await fetchProjectEquipment();
+      }
+      
       toast({
         title: "Błąd",
         description: "Nie udało się pobrać sprzętu projektu",
