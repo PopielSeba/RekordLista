@@ -108,7 +108,7 @@ const DraggableEquipmentItem = ({
     (!!item.equipment?.id && !eq.project_parent_id && eq.equipment?.parent_id === item.equipment?.id)
   ));
   // For items with description (custom or from list) support a simple textual description shown as a child line
-  const hasDescription = !!item.custom_description?.trim();
+  const hasDescription = !!item.custom_description?.trim() || (item.is_custom && item.custom_name && !item.custom_description?.startsWith('data:'));
   const hasChildren = childEquipment.length > 0 || hasDescription;
   const isExpanded = expandedItems.has(item.id);
 
@@ -336,9 +336,9 @@ const DraggableEquipmentItem = ({
       </div>
       
       {/* Render custom description as simple text (but not for file data) */}
-      {hasDescription && isExpanded && !item.custom_description?.startsWith('data:') && (
+      {hasDescription && isExpanded && (
         <div className="mt-1 text-[13px] text-foreground/80" style={{ marginLeft: `${(level + 1) * 12}px` }}>
-          • {item.custom_description}
+          • {item.custom_description?.startsWith('data:') ? item.custom_name : item.custom_description}
         </div>
       )}
       {/* Render child equipment (accessories) */}
