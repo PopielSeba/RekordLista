@@ -146,14 +146,15 @@ export const useProjects = () => {
       const sourceColor = sourceProject.color || '#3b82f6';
       const lighterColor = lightenColor(sourceColor, 0.4); // Make it 40% lighter
       
+      // Remove color field as it might not exist in the database yet
       const newProjectData = {
         name: `${sourceProject.name} - Wysyłka Powrotna`,
         description: `Wysyłka powrotna sprzętu z projektu: ${sourceProject.description}`,
         status: 'active' as const,
         start_date: new Date().toISOString().split('T')[0],
         location: sourceProject.location,
-        reverse_flow: true,
-        color: lighterColor
+        reverse_flow: true
+        // color: lighterColor - removed as column might not exist
       };
 
       const { data: newProject, error: createError } = await supabase
@@ -163,6 +164,9 @@ export const useProjects = () => {
         .single();
 
       if (createError) throw createError;
+
+      // Add color back to the new project data
+      const newProjectWithColor = { ...newProject, color: lighterColor };
 
       // Copy project equipment but with different status for reverse flow
       const { data: sourceEquipment, error: equipmentError } = await supabase
@@ -182,7 +186,7 @@ export const useProjects = () => {
         const newEquipment = sourceEquipment.map(({ id: oldId, created_at: _createdAt, updated_at: _updatedAt, project_id: _oldProjectId, project_parent_id, ...rest }) => ({
           ...rest,
           id: idMapping.get(oldId as string)!,
-          project_id: newProject.id,
+          project_id: newProjectWithColor.id,
           project_parent_id: project_parent_id ? idMapping.get(project_parent_id as string) ?? null : null,
           status: 'delivered',
           intermediate_warehouse_id: null
@@ -207,7 +211,7 @@ export const useProjects = () => {
       if (sourceDepartments && sourceDepartments.length > 0) {
         const newDepartments = sourceDepartments.map(({ id: _oldId, created_at: _createdAt, ...rest }) => ({
           ...rest,
-          project_id: newProject.id
+          project_id: newProjectWithColor.id
         }));
 
         const { error: insertDeptError } = await supabase
@@ -228,7 +232,7 @@ export const useProjects = () => {
       if (sourceDestinations && sourceDestinations.length > 0) {
         const newDestinations = sourceDestinations.map(({ id: _oldId, created_at: _createdAt, updated_at: _updatedAt, project_id: _oldProjectId, ...rest }) => ({
           ...rest,
-          project_id: newProject.id
+          project_id: newProjectWithColor.id
         }));
 
         const { error: insertDestError } = await supabase
@@ -238,12 +242,12 @@ export const useProjects = () => {
         if (insertDestError) throw insertDestError;
       }
 
-      setProjects(prev => [{ ...newProject, status: newProject.status as 'active' | 'completed' | 'pending' }, ...prev]);
+      setProjects(prev => [{ ...newProjectWithColor, status: newProjectWithColor.status as 'active' | 'completed' | 'pending' }, ...prev]);
       toast({
         title: "Sukces",
         description: "Projekt wysyłki powrotnej został utworzony"
       });
-      return { success: true, data: newProject };
+      return { success: true, data: newProjectWithColor };
     } catch (error) {
       console.error('Error copying project for return:', error);
       toast({
