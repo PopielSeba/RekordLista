@@ -2,6 +2,25 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
+// Helper function to lighten a hex color
+const lightenColor = (hex: string, factor: number): string => {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  
+  // Parse RGB values
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  
+  // Lighten by mixing with white
+  const newR = Math.round(r + (255 - r) * factor);
+  const newG = Math.round(g + (255 - g) * factor);
+  const newB = Math.round(b + (255 - b) * factor);
+  
+  // Convert back to hex
+  return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+};
+
 export interface DatabaseProject {
   id: string;
   name: string;
@@ -13,6 +32,7 @@ export interface DatabaseProject {
   created_at: string;
   updated_at: string;
   reverse_flow?: boolean;
+  color?: string;
 }
 
 export const useProjects = () => {
@@ -110,13 +130,17 @@ export const useProjects = () => {
       if (fetchError) throw fetchError;
 
       // Create new project with reverse flow
+      const sourceColor = sourceProject.color || '#3b82f6';
+      const lighterColor = lightenColor(sourceColor, 0.4); // Make it 40% lighter
+      
       const newProjectData = {
         name: `${sourceProject.name} - Wysyłka Powrotna`,
         description: `Wysyłka powrotna sprzętu z projektu: ${sourceProject.description}`,
         status: 'active' as const,
         start_date: new Date().toISOString().split('T')[0],
         location: sourceProject.location,
-        reverse_flow: true
+        reverse_flow: true,
+        color: lighterColor
       };
 
       const { data: newProject, error: createError } = await supabase

@@ -626,6 +626,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          color: string
           created_at: string
           created_by: string | null
           description: string
@@ -639,6 +640,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          color?: string
           created_at?: string
           created_by?: string | null
           description: string
@@ -652,6 +654,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          color?: string
           created_at?: string
           created_by?: string | null
           description?: string

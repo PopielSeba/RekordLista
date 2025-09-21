@@ -35,7 +35,8 @@ export const AdminProjects = () => {
     status: 'active' as 'active' | 'completed' | 'pending',
     start_date: '',
     end_date: '',
-    location: ''
+    location: '',
+    color: '#3b82f6'
   });
 
   // Check permissions on mount - all authenticated users can do everything now
@@ -53,7 +54,8 @@ export const AdminProjects = () => {
       status: 'active',
       start_date: '',
       end_date: '',
-      location: ''
+      location: '',
+      color: '#3b82f6'
     });
   };
 
@@ -73,7 +75,8 @@ export const AdminProjects = () => {
       status: project.status,
       start_date: project.start_date,
       end_date: project.end_date || '',
-      location: project.location
+      location: project.location,
+      color: project.color || '#3b82f6'
     });
     setIsEditDialogOpen(true);
   };
@@ -147,6 +150,10 @@ export const AdminProjects = () => {
       setFormData(prev => ({ ...prev, status: value }));
     };
 
+    const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormData(prev => ({ ...prev, color: e.target.value }));
+    };
+
     return (
       <div className="space-y-4">
         <div>
@@ -202,18 +209,39 @@ export const AdminProjects = () => {
           </div>
         </div>
         
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select value={formData.status} onValueChange={handleStatusChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Wybierz status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Aktywny</SelectItem>
-              <SelectItem value="pending">Oczekujący</SelectItem>
-              <SelectItem value="completed">Zakończony</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="status">Status</Label>
+            <Select value={formData.status} onValueChange={handleStatusChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Wybierz status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Aktywny</SelectItem>
+                <SelectItem value="pending">Oczekujący</SelectItem>
+                <SelectItem value="completed">Zakończony</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="color">Kolor projektu</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="color"
+                type="color"
+                value={formData.color}
+                onChange={handleColorChange}
+                className="w-12 h-10 p-1 border rounded"
+              />
+              <Input
+                value={formData.color}
+                onChange={handleColorChange}
+                placeholder="#3b82f6"
+                className="flex-1"
+              />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -276,8 +304,21 @@ export const AdminProjects = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProjects.map((project) => (
-          <Card key={project.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-3">
+          <Card 
+            key={project.id} 
+            className="hover:shadow-lg transition-shadow relative overflow-hidden"
+            style={{
+              '--project-color': project.color || '#3b82f6'
+            } as React.CSSProperties}
+          >
+            {/* Blur effect background */}
+            <div 
+              className="absolute inset-0 opacity-20 blur-xl pointer-events-none"
+              style={{
+                background: `radial-gradient(circle at 50% 50%, var(--project-color) 0%, transparent 70%)`
+              }}
+            />
+            <CardHeader className="pb-3 relative z-10">
               <div className="flex items-start justify-between mb-2">
                 <CardTitle className="text-lg line-clamp-2 flex items-center gap-2">
                   {project.name}
@@ -294,7 +335,7 @@ export const AdminProjects = () => {
               </p>
             </CardHeader>
             
-            <CardContent className="pt-0 space-y-3">
+            <CardContent className="pt-0 space-y-3 relative z-10">
               <div className="flex items-center text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4 mr-2" />
                 <span className="line-clamp-1">{project.location}</span>

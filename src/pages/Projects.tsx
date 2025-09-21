@@ -78,10 +78,20 @@ export const Projects = () => {
           {filteredProjects.map((project) => (
             <Card 
               key={project.id}
-              className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50 bg-card/50 backdrop-blur-sm"
+              className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:border-primary/50 bg-card/50 backdrop-blur-sm relative overflow-hidden"
               onClick={() => navigate(`/project/${project.id}`)}
+              style={{
+                '--project-color': project.color || '#3b82f6'
+              } as React.CSSProperties}
             >
-              <CardHeader className="pb-3">
+              {/* Blur effect background */}
+              <div 
+                className="absolute inset-0 opacity-20 blur-xl pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at 50% 50%, var(--project-color) 0%, transparent 70%)`
+                }}
+              />
+              <CardHeader className="pb-3 relative z-10">
                 <div className="flex items-start justify-between mb-2">
                   <CardTitle className="text-lg line-clamp-2">
                     {project.name}
@@ -97,7 +107,7 @@ export const Projects = () => {
                 </CardDescription>
               </CardHeader>
               
-              <CardContent className="pt-0 space-y-3">
+              <CardContent className="pt-0 space-y-3 relative z-10">
                 <div className="flex items-center text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
                   <span className="line-clamp-1">{project.location}</span>
